@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Kohaku.vcxproj" Id="8f7e4b6f-fb12-4d30-98af-24517bd08348" />
+</Solution>
