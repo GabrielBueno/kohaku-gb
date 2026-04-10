@@ -128,14 +128,17 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="cartridge.c" />
-    <ClCompile Include="io.c" />
+    <ClCompile Include="file.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="memory.c" />
+    <ClCompile Include="tests.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cartridge.h" />
-    <ClInclude Include="io.h" />
+    <ClInclude Include="file.h" />
+    <ClInclude Include="log.h" />
     <ClInclude Include="memory.h" />
+    <ClInclude Include="tests.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -1,19 +1,21 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#include "io.h"
-
 #define ROM "./Roms/tetris.gb"
+#define TEST
+#define MEMMAP_CHECK_NULL
 
-int main()
-{
+#ifdef TEST
+#include "tests.h"
+#endif
+
+int main() {
+	#ifdef TEST
+	tests_run();
+	return 0;
+	#endif
+
 	fprintf(stderr, "Kohaku\n");
-
-	struct Buffer rom_buffer;
-
-	ReadFile(ROM, &rom_buffer);
-
-	
 
 	return 0;
 }
