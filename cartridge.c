@@ -210,13 +210,13 @@ static enum cart_result map_write_pages(struct cartridge* cart) {
 
 static void ch_rom_bank(struct cartridge *cart, int rom_bank) {
 	assert(cart != NULL);
-	assert(rom_bank >= 1);
 	assert(rom_bank < cart->rom_banks);
 
 	int base_address = 0x4000 * rom_bank;
 
-	for (int page = 0x40; page < 0x80; page++)
+	for (int page = 0x40; page < 0x80; page++) {
 		cart->memmap->read_pages[page] = &cart->rom.data[base_address + ((page - 0x40) << 8)];
+	}
 
 	cart->current_rom_bank = rom_bank;
 }
@@ -234,15 +234,15 @@ static void rom_only_write(void* target, uint16_t addr, uint8_t value) {
 static void mbc1_write(void* target, uint16_t addr, uint8_t value) {
 	struct cartridge* cart = (struct cartridge*)target;
 
-	// DEBUG("writing MBC1 %02x to %04x", value, addr);
-
 	if (addr <= 0x1fff) {
 		cart->ram_enable = value == 0x0a;
 	} else if (addr <= 0x3fff) {
 		uint8_t reg  = value & 0b11111;
-		uint8_t mask = (cart->rom_banks - 1) | (~(cart->rom_banks - 1));
+		uint8_t mask = cart->rom_banks - 1;
 
-		DEBUG("reg:%02x, mask:%02x", reg, mask);
+		mask |= mask >> 1;
+		mask |= mask >> 2;
+		mask |= mask >> 4;
 
 		if (reg == 0x00)
 			ch_rom_bank(cart, 1);
