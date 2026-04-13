@@ -1,9 +1,13 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define ROM "./Roms/tetris.gb"
-#define TEST
-#define MEMMAP_CHECK_NULL
+#include "log.h"
+#include "file.h"
+#include "memory.h"
+#include "cartridge.h"
+
+#define ROM "./Roms/pokemon_red.gb"
+// #define TEST
 
 #ifdef TEST
 #include "tests.h"
@@ -16,6 +20,18 @@ int main() {
 	#endif
 
 	fprintf(stderr, "Kohaku\n");
+
+	struct file           rom_file;
+	struct memmap         mem;
+	struct cartridge      cart;
+	struct cartridge_info cartridge_info;
+
+	file_read(&rom_file, ROM);
+	memmap_init(&mem);
+	cart_init(&cart, rom_file, &mem);
+	cart_info(&cart, &cartridge_info);
+
+	DEBUG("CART: %s (%02x)", cartridge_info.title, cartridge_info.type);
 
 	return 0;
 }

@@ -5,7 +5,7 @@
 
 #include "log.h"
 
-enum file_result read_file(struct file *out, const char *path) {
+enum file_result file_read(struct file *out, const char *path) {
     assert(out != NULL);
 	assert(path != NULL);
 

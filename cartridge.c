@@ -3,8 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 
 #include "log.h"
+
+static uint8_t ram_disabled_page[] = { [0 ... 255] = 0xff };
 
 static enum cart_result init(struct cartridge* cart, struct file file, struct memmap* memmap);
 static enum cart_result map_addresses(struct cartridge *cart);
@@ -13,19 +16,13 @@ static enum cart_result map_write_pages(struct cartridge* cart);
 static void map_first_bank(struct cartridge *cart);
 static void ch_rom_bank(struct cartridge *cart, int rom_bank);
 static void ch_ram_bank(struct cartridge *cart, int ram_bank);
+static void disable_ram(struct cartridge *cart);
+static void enable_ram(struct cartridge *cart);
 
 static void rom_only_write(void* target, uint16_t addr, uint8_t value);
 static void mbc1_write(void* target, uint16_t addr, uint8_t value);
 static void mbc2_write(void* target, uint16_t addr, uint8_t value);
-
-enum cart_type {
-	CART_TYPE_ROM_ONLY               = 0x00,
-	CART_TYPE_MBC1                   = 0x01,
-	CART_TYPE_MBC1_WITH_RAM          = 0x02,
-	CART_TYPE_MBC1_WITH_RAM_WITH_BAT = 0x03,
-	CART_TYPE_MBC2                   = 0x04,
-	CART_TYPE_MBC2_WITH_BAT          = 0x05,
-};
+static void mbc3_write(void* target, uint16_t addr, uint8_t value);
 
 enum cart_result cart_init(struct cartridge *cart, struct file file, struct memmap* memmap) {
 	enum cart_result result;
@@ -35,6 +32,18 @@ enum cart_result cart_init(struct cartridge *cart, struct file file, struct memm
 
 	if ((result = map_addresses(cart)) != CART_OK)
 		return result;
+
+	return CART_OK;
+}
+
+enum cart_result cart_info(struct cartridge* cart, struct cartridge_info* info) {
+	assert(cart != NULL);
+	assert(info != NULL);
+
+	memcpy(info->title, &cart->rom.data[0x134], sizeof(info->title));
+
+	info->title[16] = '\0';
+	info->type = cart->cart_type;
 
 	return CART_OK;
 }
@@ -70,13 +79,13 @@ static enum cart_result init(struct cartridge* cart, struct file file, struct me
 	case 0x03:
 		rom_banks = 16;
 		break;
-	
-	// case 0x04:
-	// 	rom_banks = 32;
-	// 	break;
-	// case 0x05:
-	// 	rom_banks = 64;
-	// 	break;
+	case 0x04:
+		rom_banks = 32;
+		break;
+	case 0x05:
+		rom_banks = 64;
+		break;
+
 	// case 0x06:
 	// 	rom_banks = 128;
 	// 	break;
@@ -96,8 +105,6 @@ static enum cart_result init(struct cartridge* cart, struct file file, struct me
 	// 	rom_banks = 96;
 	// 	break;
 
-	case 0x04:
-	case 0x05:
 	case 0x06:
 	case 0x07:
 	case 0x08:
@@ -195,6 +202,12 @@ static enum cart_result map_write_pages(struct cartridge* cart) {
 		cart->write_device.write = mbc2_write;
 		break;
 
+	case CART_TYPE_MBC3:
+	case CART_TYPE_MBC3_WITH_RAM:
+	case CART_TYPE_MBC3_WITH_RAM_WITH_BATTERY:
+		cart->write_device.write = mbc3_write;
+		break;
+
 	default:
 		ERROR("cartridge type (%02x) is not supported.", cart->cart_type);
 		return CART_ERROR;
@@ -222,7 +235,35 @@ static void ch_rom_bank(struct cartridge *cart, int rom_bank) {
 }
 
 static void ch_ram_bank(struct cartridge *cart, int ram_bank) {
-	
+	assert(cart != NULL);
+	assert(ram_bank >= 0);
+	assert(ram_bank < cart->ram_banks);
+
+	cart->current_ram_bank = ram_bank;
+
+	if (!cart->ram_enable)
+		return;
+
+	int base_address = 0xa000;
+
+	for (int page = 0xa0; page < 0xc0; page++)
+		cart->memmap->read_pages[page] = &cart->ram[base_address + ((page - 0xa0) << 8)];
+}
+
+static void disable_ram(struct cartridge *cart) {
+	assert(cart != NULL);
+
+	cart->ram_enable = 0;
+
+	for (int page = 0xa0; page < 0xc0; page++) 
+		cart->memmap->read_pages[page] = ram_disabled_page;
+}
+
+static void enable_ram(struct cartridge *cart) {
+	assert(cart != NULL);
+
+	cart->ram_enable = 1;
+	ch_ram_bank(cart, cart->current_ram_bank);
 }
 
 static void rom_only_write(void* target, uint16_t addr, uint8_t value) {
@@ -235,7 +276,11 @@ static void mbc1_write(void* target, uint16_t addr, uint8_t value) {
 	struct cartridge* cart = (struct cartridge*)target;
 
 	if (addr <= 0x1fff) {
-		cart->ram_enable = value == 0x0a;
+		if (value == 0x0a) {
+			enable_ram(cart);
+		} else {
+			disable_ram(cart);
+		}
 	} else if (addr <= 0x3fff) {
 		uint8_t reg  = value & 0b11111;
 		uint8_t mask = cart->rom_banks - 1;
@@ -255,4 +300,48 @@ static void mbc2_write(void* target, uint16_t addr, uint8_t value) {
 	struct cartridge* cart = (struct cartridge*)target;
 
 	DEBUG("wrote to MBC2 cartridge: %02x -> %02x", addr, value);
+}
+
+static void mbc3_write(void* target, uint16_t addr, uint8_t value) {
+	struct cartridge* cart = (struct cartridge*)target;
+
+	if (addr <= 0x1fff) {
+		if (value == 0x0a)
+			enable_ram(cart);
+		else
+			disable_ram(cart);
+	}
+	
+	if (addr >= 0x2000 && addr <= 0x3fff) {
+		uint8_t reg  = value & 0x7f;
+		uint8_t mask = cart->rom_banks - 1;
+
+		mask |= mask >> 1;
+		mask |= mask >> 2;
+		mask |= mask >> 4;
+
+		if (reg == 0x00)
+			ch_rom_bank(cart, 1);
+		else
+			ch_rom_bank(cart, reg & mask);
+	}
+
+	if (addr >= 0x4000 && addr <= 0x5fff) {
+		if (value <= 0x07) {
+			uint8_t reg  = value & 0x07;
+			uint8_t mask = cart->ram_banks - 1;
+
+			mask |= mask >> 1;
+			mask |= mask >> 2;
+			mask |= mask >> 4;
+
+			ch_ram_bank(cart, reg & mask);
+		} else {
+			WARN("writing to RTC register 0x4000 is yet to be implemented.");
+		}
+	}
+
+	if (addr >= 0xa000 && addr <= 0xbfff) {
+		WARN("writing to RTC register 0xa000 is yet to be implemented.");
+	}
 }

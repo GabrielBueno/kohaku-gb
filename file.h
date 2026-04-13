@@ -14,6 +14,6 @@ struct file {
     size_t length;
 };
 
-enum file_result read_file(struct file *file, const char *path);
+enum file_result file_read(struct file *file, const char *path);
 
 #endif
