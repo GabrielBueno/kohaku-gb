@@ -27,14 +27,14 @@ enum cart_type {
 
 struct cartridge
 {
-	struct write_device write_device;
+	struct mem_write_dev mem_write_dev;
 
 	struct {
 		uint8_t* data;
 		size_t length;
 	} rom;
 
-	struct memmap* memmap;
+	struct mem* mem;
 	int rom_banks;
 	int ram_banks;
 	int current_rom_bank;
@@ -49,7 +49,7 @@ struct cartridge_info {
 	enum cart_type type;
 };
 
-enum cart_result cart_init(struct cartridge* cart, struct file file, struct memmap* memmap);
-enum cart_result cart_info(struct cartridge* cart, struct cartridge_info* info);
+enum cart_result cart_init(struct cartridge *cart, struct file file, struct mem *mem);
+enum cart_result cart_info(struct cartridge *cart, struct cartridge_info *info);
 
 #endif
