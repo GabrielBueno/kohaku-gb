@@ -16,5 +16,6 @@ struct memmap {
 void memmap_init(struct memmap* memmap);
 uint8_t read8(struct memmap *memmap, uint16_t addr);
 void write8(struct memmap *memmap, uint16_t addr, uint8_t value);
+void set8(struct memmap* memmap, uint16_t addr, uint8_t value);
 
 #endif

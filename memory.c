@@ -23,9 +23,8 @@ uint8_t read8(struct memmap *memmap, uint16_t addr) {
     uint8_t* page = memmap->read_pages[addr >> 8];
        
 #ifndef MEMMAP_SKIP_NULL_CHECK
-    if (page == NULL) {
+    if (page == NULL)
         FATAL("reading from an unmapped address (addr=%02x)", addr);
-    }
 #endif
 
     return page[addr & 0xff];
@@ -41,4 +40,15 @@ void write8(struct memmap *memmap, uint16_t addr, uint8_t value) {
 #endif
 
     dev->write(dev->target, addr, value);
+}
+
+void set8(struct memmap *memmap, uint16_t addr, uint8_t value) {
+    uint8_t* page = memmap->read_pages[addr >> 8];
+       
+#ifndef MEMMAP_SKIP_NULL_CHECK
+    if (page == NULL)
+        FATAL("reading from an unmapped address (addr=%02x)", addr);
+#endif
+
+    page[addr & 0xff] = value;
 }
