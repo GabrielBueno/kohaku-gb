@@ -4,6 +4,9 @@
 #include "log.h"
 
 static enum gb_result init_mem(struct gb *gb, struct gb_options *options);
+static enum gb_result init_cpu(struct gb *gb, struct gb_options *options);
+static enum gb_result init_ppu(struct gb *gb, struct gb_options *options);
+static enum gb_result init_ram(struct gb *gb, struct gb_options *options);
 static enum gb_result init_cart(struct gb *gb, struct gb_options *options);
 static enum gb_result init_joypad(struct gb *gb, struct gb_options *options);
 static enum gb_result map_ioregs(struct gb *gb, struct gb_options *options);
@@ -26,6 +29,15 @@ enum gb_result gb_init(struct gb *gb, struct gb_options *options) {
     if ((result = init_joypad(gb, options)) != GB_OK)
         return result;
 
+    if ((result = init_cpu(gb, options)) != GB_OK)
+        return result;
+
+    if ((result = init_ppu(gb, options)) != GB_OK)
+        return result;
+
+    if ((result = init_ram(gb, options)) != GB_OK)
+        return result;
+
     if ((result = map_ioregs(gb, options)) != GB_OK)
         return result;
 
@@ -33,6 +45,29 @@ enum gb_result gb_init(struct gb *gb, struct gb_options *options) {
 }
 
 enum gb_result gb_close(struct gb *gb) {
+    cpu_close(&gb->cpu);
+
+    return GB_OK;
+}
+
+static enum gb_result init_cpu(struct gb *gb, struct gb_options *options) {
+    if (cpu_init(&gb->cpu, &gb->mem) != CPU_OK)
+        return GB_ERR;
+
+    return GB_OK;
+}
+
+static enum gb_result init_ppu(struct gb *gb, struct gb_options *options) {
+    if (ppu_init(&gb->ppu, &gb->mem) != PPU_OK)
+        return GB_ERR;
+
+    return GB_OK;
+}
+
+static enum gb_result init_ram(struct gb *gb, struct gb_options *options) {
+    if (ram_init(&gb->ram, &gb->mem) != RAM_OK)
+        return GB_ERR;
+
     return GB_OK;
 }
 
@@ -76,8 +111,11 @@ static enum gb_result map_ioregs(struct gb *gb, struct gb_options *options) {
 static void gb_ioreg_write(void *target, uint16_t addr, uint8_t value) {
     struct gb *gb = (struct gb*)target;
 
-    if (addr == REG_JOYP_ADDR)
+    if (addr == REG_ADDR_JOYP)
         return joypad_ioreg_joyp_write(&gb->joypad, value);
+
+    if (addr >= REG_ADDR_HRAM_START && addr <= REG_ADDR_HRAM_END)
+        return cpu_ioreg_interrupt_enable_write(&gb->cpu, value);
 
     WARN("writing to ioreg (value=#%02x, addr=#%04x) has no implemented behaviour.", value, addr);
 }
@@ -85,8 +123,11 @@ static void gb_ioreg_write(void *target, uint16_t addr, uint8_t value) {
 static uint8_t gb_ioreg_read(void *target, uint16_t addr) {
     struct gb *gb = (struct gb*)target;
 
-    if (addr == REG_JOYP_ADDR)
+    if (addr == REG_ADDR_JOYP)
         return joypad_ioreg_joyp_read(&gb->joypad);
+
+    if (addr >= REG_ADDR_HRAM_START && addr <= REG_ADDR_HRAM_END)
+        return cpu_ioreg_interrupt_enable_read(&gb->cpu);
 
     WARN("reading from ioreg (addr=#%04x) has no implemented behaviour.", addr);
 

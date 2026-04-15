@@ -12,20 +12,13 @@ static uint8_t unmapped_read(void *target, uint16_t addr) {
     return 0;
 }
 
-static struct mem_write_dev unmapped_write_device = {
-    .target = NULL,
-    .write  = unmapped_write,
-};
-
-static struct mem_read_dev unmapped_read_device = {
-    .target = NULL,
-    .read   = unmapped_read
-};
+struct mem_write_dev MEM_UNMAPPED_WRITE_DEV = { .target = NULL, .write = unmapped_write };
+struct mem_read_dev  MEM_UNMAPPED_READ_DEV  = { .target = NULL, .read  = unmapped_read };
 
 void mem_init(struct mem *mem) {
     for (uint16_t page = 0x00; page <= 0xff; page++) {
-        mem->write_dev[page]    = &unmapped_write_device;
-        mem->read_dev[page]     = &unmapped_read_device;
+        mem->write_dev[page]    = &MEM_UNMAPPED_WRITE_DEV;
+        mem->read_dev[page]     = &MEM_UNMAPPED_READ_DEV;
         mem->write_direct[page] = NULL;
         mem->read_direct[page]  = NULL;
     }

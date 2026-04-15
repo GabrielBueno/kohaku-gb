@@ -244,7 +244,7 @@ static void ch_ram_bank(struct cartridge *cart, int ram_bank) {
 	if (!cart->ram_enable)
 		return;
 
-	int base_address = 0xa000;
+	int base_address = 0xa000 * ram_bank;
 
 	for (int page = 0xa0; page < 0xc0; page++)
 		cart->mem->read_direct[page] = &cart->ram[base_address + ((page - 0xa0) << 8)];

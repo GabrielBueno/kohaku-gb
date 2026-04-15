@@ -20,6 +20,9 @@ struct mem {
 	uint8_t *write_direct[256];
 };
 
+extern struct mem_read_dev  MEM_UNMAPPED_READ_DEV;
+extern struct mem_write_dev MEM_UNMAPPED_WRITE_DEV;
+
 void mem_init(struct mem *mem);
 uint8_t mem_read8(struct mem *mem, uint16_t addr);
 void mem_write8(struct mem *mem, uint16_t addr, uint8_t value);
