@@ -1,5 +1,5 @@
 all:
 	gcc \
 		-g -Wall -Wextra -Werror -Wno-unused-variable -Wno-unused-parameter -Wno-unused-argument \
-		tests.c file.c main.c cartridge.c memory.c -o \
+		./src/tests.c ./src/file.c ./src/gb.c ./src/joypad.c ./src/ioregs.c ./src/cartridge.c ./src/memory.c ./src/main.c -o \
 		kohaku

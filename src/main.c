@@ -22,12 +22,12 @@ int main() {
 	fprintf(stderr, "Kohaku\n");
 
 	struct file           rom_file;
-	struct memmap         mem;
+	struct mem            mem;
 	struct cartridge      cart;
 	struct cartridge_info cartridge_info;
 
 	file_read(&rom_file, ROM);
-	memmap_init(&mem);
+	mem_init(&mem);
 	cart_init(&cart, rom_file, &mem);
 	cart_info(&cart, &cartridge_info);
 

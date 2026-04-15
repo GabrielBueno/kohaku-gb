@@ -80,7 +80,7 @@ uint8_t CART_DATA[] = {
 
 static struct file file;
 static struct cartridge cart;
-static struct memmap mem;
+static struct mem mem;
 
 static void setup();
 static void setup_cartridge();
@@ -101,7 +101,7 @@ static void setup() {
 }
 
 static void setup_memory() {
-    memmap_init(&mem);
+    mem_init(&mem);
 }
 
 static void setup_cartridge() {
@@ -144,17 +144,17 @@ static void test_cartridge() {
     expect_read8(0x7ffe, 0x12);
     expect_read8(0x7fff, 0x12);
 
-    write8(&mem, 0x0000, 0x0a);
+    mem_write8(&mem, 0x0000, 0x0a);
     assert(cart.ram_enable);
-    write8(&mem, 0x0000, 0x0d);
+    mem_write8(&mem, 0x0000, 0x0d);
     assert(!cart.ram_enable);
-    write8(&mem, 0x1fff, 0x0a);
+    mem_write8(&mem, 0x1fff, 0x0a);
     assert(cart.ram_enable);
-    write8(&mem, 0x1fff, 0x11);
+    mem_write8(&mem, 0x1fff, 0x11);
     assert(!cart.ram_enable);
 
     // must read bank 1
-    write8(&mem, 0x4000, 0x00);
+    mem_write8(&mem, 0x4000, 0x00);
     expect_read8(0x4000, 0x11);
     expect_read8(0x4001, 0x11);
     expect_read8(0x4002, 0x11);
@@ -170,7 +170,7 @@ static void test_cartridge() {
     expect_read8(0x7fff, 0x12);
 
     // must read bank 1
-    write8(&mem, 0x4000, 0x01);
+    mem_write8(&mem, 0x4000, 0x01);
     expect_read8(0x4000, 0x11);
     expect_read8(0x4001, 0x11);
     expect_read8(0x4002, 0x11);
@@ -186,7 +186,7 @@ static void test_cartridge() {
     expect_read8(0x7fff, 0x12);
 
     // must read bank 2
-    write8(&mem, 0x3fff, 0x02);
+    mem_write8(&mem, 0x3fff, 0x02);
     expect_read8(0x4000, 0x21);
     expect_read8(0x4001, 0x21);
     expect_read8(0x4002, 0x21);
@@ -202,7 +202,7 @@ static void test_cartridge() {
     expect_read8(0x7fff, 0x22);
 
     // must read bank 3
-    write8(&mem, 0x3000, 0x13);
+    mem_write8(&mem, 0x3000, 0x13);
     expect_read8(0x4000, 0x31);
     expect_read8(0x4001, 0x31);
     expect_read8(0x4002, 0x31);
@@ -218,7 +218,7 @@ static void test_cartridge() {
     expect_read8(0x7fff, 0x32);
 
     // must read bank 0
-    write8(&mem, 0x2000, 0x10);
+    mem_write8(&mem, 0x2000, 0x10);
     expect_read8(0x4000, 0x01);
     expect_read8(0x4001, 0x01);
     expect_read8(0x4002, 0x01);
@@ -237,7 +237,7 @@ static void test_cartridge() {
 }
 
 static void expect_read8(uint16_t addr, uint8_t value) {
-    uint8_t read = read8(&mem, addr);
+    uint8_t read = mem_read8(&mem, addr);
 
     if (read != value)
         FATAL("expected to read %02x on address %04x, read %02x instead.", value, addr, read);

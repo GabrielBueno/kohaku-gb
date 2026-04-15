@@ -2,6 +2,7 @@
 #define LOG_H
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #define ERROR(fmt, ...) fprintf(stderr, "E: [%s:%d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 #define WARN(fmt,  ...) fprintf(stderr, "W: [%s:%d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
