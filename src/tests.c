@@ -1,0 +1,244 @@
+#include "tests.h"
+
+#include <assert.h>
+
+#include "log.h"
+#include "file.h"
+#include "cartridge.h"
+#include "memory.h"
+
+uint8_t CART_DATA[] = {
+    // header
+    [0x0147] = 0x02, // cart-type
+    [0x0148] = 0x01, // num of rom banks
+    [0x0149] = 0x03, // num of ram banks
+
+    // bank 0 start
+    [0x0000] = 0x01,
+    [0x0001] = 0x01,
+    [0x0002] = 0x01,
+    [0x0003] = 0x01,
+    [0x0004] = 0x01,
+    [0x0005] = 0x01,
+
+    // bank 0 end
+    [0x3ffa] = 0x02,
+    [0x3ffb] = 0x02,
+    [0x3ffc] = 0x02,
+    [0x3ffd] = 0x02,
+    [0x3ffe] = 0x02,
+    [0x3fff] = 0x02,
+
+    // bank 1 start
+    [0x4000] = 0x11,
+    [0x4001] = 0x11,
+    [0x4002] = 0x11,
+    [0x4003] = 0x11,
+    [0x4004] = 0x11,
+    [0x4005] = 0x11,
+
+    // bank 1 end
+    [0x7ffa] = 0x12,
+    [0x7ffb] = 0x12,
+    [0x7ffc] = 0x12,
+    [0x7ffd] = 0x12,
+    [0x7ffe] = 0x12,
+    [0x7fff] = 0x12,
+
+    // bank 2 start
+    [0x8000] = 0x21,
+    [0x8001] = 0x21,
+    [0x8002] = 0x21,
+    [0x8003] = 0x21,
+    [0x8004] = 0x21,
+    [0x8005] = 0x21,
+
+    // bank 2 end
+    [0xbffa] = 0x22,
+    [0xbffb] = 0x22,
+    [0xbffc] = 0x22,
+    [0xbffd] = 0x22,
+    [0xbffe] = 0x22,
+    [0xbfff] = 0x22,
+
+    // bank 3 start
+    [0xc000] = 0x31,
+    [0xc001] = 0x31,
+    [0xc002] = 0x31,
+    [0xc003] = 0x31,
+    [0xc004] = 0x31,
+    [0xc005] = 0x31,
+
+    // bank 3 end
+    [0xfffa] = 0x32,
+    [0xfffb] = 0x32,
+    [0xfffc] = 0x32,
+    [0xfffd] = 0x32,
+    [0xfffe] = 0x32,
+    [0xffff] = 0x32,
+};
+
+static struct file file;
+static struct cartridge cart;
+static struct mem mem;
+
+static void setup();
+static void setup_cartridge();
+static void setup_memory();
+static void expect_read8(uint16_t addr, uint8_t value);
+
+static void test_cartridge();
+
+void tests_run() {
+    DEBUG("starting tests...");
+    setup();
+    test_cartridge();
+}
+
+static void setup() {
+    setup_memory();
+    setup_cartridge();
+}
+
+static void setup_memory() {
+    mem_init(&mem);
+}
+
+static void setup_cartridge() {
+    file.data   = CART_DATA;
+    file.length = sizeof(CART_DATA);
+
+    cart_init(&cart, file, &mem);
+}
+
+static void test_cartridge() {
+    DEBUG("starting test_cartridge()...");
+
+    assert(!cart.ram_enable);
+
+    expect_read8(0x0000, 0x01);
+    expect_read8(0x0001, 0x01);
+    expect_read8(0x0002, 0x01);
+    expect_read8(0x0003, 0x01);
+    expect_read8(0x0004, 0x01);
+    expect_read8(0x0005, 0x01);
+
+    expect_read8(0x3ffa, 0x02);
+    expect_read8(0x3ffb, 0x02);
+    expect_read8(0x3ffc, 0x02);
+    expect_read8(0x3ffd, 0x02);
+    expect_read8(0x3ffe, 0x02);
+    expect_read8(0x3fff, 0x02);
+
+    expect_read8(0x4000, 0x11);
+    expect_read8(0x4001, 0x11);
+    expect_read8(0x4002, 0x11);
+    expect_read8(0x4003, 0x11);
+    expect_read8(0x4004, 0x11);
+    expect_read8(0x4005, 0x11);
+
+    expect_read8(0x7ffa, 0x12);
+    expect_read8(0x7ffb, 0x12);
+    expect_read8(0x7ffc, 0x12);
+    expect_read8(0x7ffd, 0x12);
+    expect_read8(0x7ffe, 0x12);
+    expect_read8(0x7fff, 0x12);
+
+    mem_write8(&mem, 0x0000, 0x0a);
+    assert(cart.ram_enable);
+    mem_write8(&mem, 0x0000, 0x0d);
+    assert(!cart.ram_enable);
+    mem_write8(&mem, 0x1fff, 0x0a);
+    assert(cart.ram_enable);
+    mem_write8(&mem, 0x1fff, 0x11);
+    assert(!cart.ram_enable);
+
+    // must read bank 1
+    mem_write8(&mem, 0x4000, 0x00);
+    expect_read8(0x4000, 0x11);
+    expect_read8(0x4001, 0x11);
+    expect_read8(0x4002, 0x11);
+    expect_read8(0x4003, 0x11);
+    expect_read8(0x4004, 0x11);
+    expect_read8(0x4005, 0x11);
+
+    expect_read8(0x7ffa, 0x12);
+    expect_read8(0x7ffb, 0x12);
+    expect_read8(0x7ffc, 0x12);
+    expect_read8(0x7ffd, 0x12);
+    expect_read8(0x7ffe, 0x12);
+    expect_read8(0x7fff, 0x12);
+
+    // must read bank 1
+    mem_write8(&mem, 0x4000, 0x01);
+    expect_read8(0x4000, 0x11);
+    expect_read8(0x4001, 0x11);
+    expect_read8(0x4002, 0x11);
+    expect_read8(0x4003, 0x11);
+    expect_read8(0x4004, 0x11);
+    expect_read8(0x4005, 0x11);
+
+    expect_read8(0x7ffa, 0x12);
+    expect_read8(0x7ffb, 0x12);
+    expect_read8(0x7ffc, 0x12);
+    expect_read8(0x7ffd, 0x12);
+    expect_read8(0x7ffe, 0x12);
+    expect_read8(0x7fff, 0x12);
+
+    // must read bank 2
+    mem_write8(&mem, 0x3fff, 0x02);
+    expect_read8(0x4000, 0x21);
+    expect_read8(0x4001, 0x21);
+    expect_read8(0x4002, 0x21);
+    expect_read8(0x4003, 0x21);
+    expect_read8(0x4004, 0x21);
+    expect_read8(0x4005, 0x21);
+
+    expect_read8(0x7ffa, 0x22);
+    expect_read8(0x7ffb, 0x22);
+    expect_read8(0x7ffc, 0x22);
+    expect_read8(0x7ffd, 0x22);
+    expect_read8(0x7ffe, 0x22);
+    expect_read8(0x7fff, 0x22);
+
+    // must read bank 3
+    mem_write8(&mem, 0x3000, 0x13);
+    expect_read8(0x4000, 0x31);
+    expect_read8(0x4001, 0x31);
+    expect_read8(0x4002, 0x31);
+    expect_read8(0x4003, 0x31);
+    expect_read8(0x4004, 0x31);
+    expect_read8(0x4005, 0x31);
+
+    expect_read8(0x7ffa, 0x32);
+    expect_read8(0x7ffb, 0x32);
+    expect_read8(0x7ffc, 0x32);
+    expect_read8(0x7ffd, 0x32);
+    expect_read8(0x7ffe, 0x32);
+    expect_read8(0x7fff, 0x32);
+
+    // must read bank 0
+    mem_write8(&mem, 0x2000, 0x10);
+    expect_read8(0x4000, 0x01);
+    expect_read8(0x4001, 0x01);
+    expect_read8(0x4002, 0x01);
+    expect_read8(0x4003, 0x01);
+    expect_read8(0x4004, 0x01);
+    expect_read8(0x4005, 0x01);
+
+    expect_read8(0x7ffa, 0x02);
+    expect_read8(0x7ffb, 0x02);
+    expect_read8(0x7ffc, 0x02);
+    expect_read8(0x7ffd, 0x02);
+    expect_read8(0x7ffe, 0x02);
+    expect_read8(0x7fff, 0x02);
+
+    DEBUG("cartridge tests passed.");
+}
+
+static void expect_read8(uint16_t addr, uint8_t value) {
+    uint8_t read = mem_read8(&mem, addr);
+
+    if (read != value)
+        FATAL("expected to read %02x on address %04x, read %02x instead.", value, addr, read);
+}
