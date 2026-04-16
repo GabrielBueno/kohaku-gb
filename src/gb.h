@@ -8,6 +8,7 @@
 #include "cartridge.h"
 #include "joypad.h"
 #include "ioregs.h"
+#include "interrupt.h"
 
 enum gb_result {
     GB_OK  = 0,
@@ -23,6 +24,7 @@ struct gb {
     struct mem mem;
     struct joypad joypad;
     struct ioregs ioregs;
+    struct interrupt interrupt;
 };
 
 struct gb_options {
