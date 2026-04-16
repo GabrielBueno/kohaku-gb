@@ -10,6 +10,7 @@ static enum gb_result init_ram(struct gb *gb, struct gb_options *options);
 static enum gb_result init_cart(struct gb *gb, struct gb_options *options);
 static enum gb_result init_joypad(struct gb *gb, struct gb_options *options);
 static enum gb_result init_interrupt(struct gb *gb, struct gb_options *options);
+static enum gb_result init_timer(struct gb *gb, struct gb_options *options);
 static enum gb_result map_ioregs(struct gb *gb, struct gb_options *options);
 
 static void    gb_ioreg_write(void *target, uint16_t addr, uint8_t value);
@@ -40,6 +41,9 @@ enum gb_result gb_init(struct gb *gb, struct gb_options *options) {
         return result;
 
     if ((result = init_interrupt(gb, options)) != GB_OK)
+        return result;
+
+    if ((result = init_timer(gb, options)) != GB_OK)
         return result;
 
     if ((result = map_ioregs(gb, options)) != GB_OK)
@@ -102,6 +106,12 @@ static enum gb_result init_interrupt(struct gb *gb, struct gb_options *options) 
     return GB_OK;
 }
 
+static enum gb_result init_timer(struct gb *gb, struct gb_options *options) {
+    timer_init(&gb->timer);
+
+    return GB_OK;
+}
+
 static enum gb_result map_ioregs(struct gb *gb, struct gb_options *options) {
     gb->ioregs.read_dev.target = gb;
     gb->ioregs.read_dev.read   = gb_ioreg_read;
@@ -121,13 +131,22 @@ static enum gb_result map_ioregs(struct gb *gb, struct gb_options *options) {
 static void gb_ioreg_write(void *target, uint16_t addr, uint8_t value) {
     struct gb *gb = (struct gb*)target;
 
-    if (addr == REG_ADDR_JOYP)
-        return joypad_ioreg_joyp_write(&gb->joypad, value);
-
     if (addr >= REG_ADDR_HRAM_START && addr <= REG_ADDR_HRAM_END) {
         gb->ioregs.high_ram[addr - REG_ADDR_HRAM_START] = value;
         return;
     }
+
+    if (addr == REG_ADDR_TIMER_DIV)
+        return timer_reg_div_write(&gb->timer, value);
+
+    if (addr == REG_ADDR_TIMER_TIMA)
+        return timer_reg_tima_write(&gb->timer, value);
+
+    if (addr == REG_ADDR_TIMER_TMA)
+        return timer_reg_tma_write(&gb->timer, value);
+
+    if (addr == REG_ADDR_TIMER_TAC)
+        return timer_reg_tac_write(&gb->timer, value);
 
     if (addr == REG_ADDR_INTERRUPT_ENABLE)
         return interrupt_reg_ie_write(&gb->interrupt, value);
@@ -135,23 +154,38 @@ static void gb_ioreg_write(void *target, uint16_t addr, uint8_t value) {
     if (addr == REG_ADDR_INTERRUPT_FLAG)
         return interrupt_reg_if_write(&gb->interrupt, value);
 
+    if (addr == REG_ADDR_JOYP)
+        return joypad_ioreg_joyp_write(&gb->joypad, value);
+
     WARN("writing to ioreg (value=#%02x, addr=#%04x) has no implemented behaviour.", value, addr);
 }
 
 static uint8_t gb_ioreg_read(void *target, uint16_t addr) {
     struct gb *gb = (struct gb*)target;
 
-    if (addr == REG_ADDR_JOYP)
-        return joypad_ioreg_joyp_read(&gb->joypad);
-
     if (addr >= REG_ADDR_HRAM_START && addr <= REG_ADDR_HRAM_END)
         return gb->ioregs.high_ram[addr - REG_ADDR_HRAM_START];
+
+    if (addr == REG_ADDR_TIMER_DIV)
+        return timer_reg_div_read(&gb->timer);
+
+    if (addr == REG_ADDR_TIMER_TIMA)
+        return timer_reg_tima_read(&gb->timer);
+
+    if (addr == REG_ADDR_TIMER_TMA)
+        return timer_reg_tma_read(&gb->timer);
+
+    if (addr == REG_ADDR_TIMER_TAC)
+        return timer_reg_tac_read(&gb->timer);
 
     if (addr == REG_ADDR_INTERRUPT_ENABLE)
         return gb->interrupt.enabled;
 
     if (addr == REG_ADDR_INTERRUPT_FLAG)
         return gb->interrupt.requested;
+
+    if (addr == REG_ADDR_JOYP)
+        return joypad_ioreg_joyp_read(&gb->joypad);
 
     WARN("reading from ioreg (addr=#%04x) has no implemented behaviour.", addr);
 

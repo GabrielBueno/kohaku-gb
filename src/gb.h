@@ -9,6 +9,7 @@
 #include "joypad.h"
 #include "ioregs.h"
 #include "interrupt.h"
+#include "timer.h"
 
 enum gb_result {
     GB_OK  = 0,
@@ -25,6 +26,7 @@ struct gb {
     struct joypad joypad;
     struct ioregs ioregs;
     struct interrupt interrupt;
+    struct timer timer;
 };
 
 struct gb_options {
