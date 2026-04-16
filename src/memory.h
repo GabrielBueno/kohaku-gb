@@ -25,6 +25,7 @@ extern struct mem_write_dev MEM_UNMAPPED_WRITE_DEV;
 
 void mem_init(struct mem *mem);
 uint8_t mem_read8(struct mem *mem, uint16_t addr);
+uint16_t mem_read16(struct mem *mem, uint16_t addr);
 void mem_write8(struct mem *mem, uint16_t addr, uint8_t value);
 
 #endif

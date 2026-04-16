@@ -122,7 +122,7 @@ static enum cart_result init(struct cartridge *cart, struct file file, struct me
 	switch (rom_data[0x149]) {
 	case 0x00:
 	case 0x01:
-		ram_banks = 0;
+		ram_banks = 1;
 		break;
 
 	case 0x02:
@@ -235,6 +235,9 @@ static void ch_rom_bank(struct cartridge *cart, int rom_bank) {
 }
 
 static void ch_ram_bank(struct cartridge *cart, int ram_bank) {
+	if (cart->ram_banks == 0)
+		return;
+		
 	assert(cart != NULL);
 	assert(ram_bank >= 0);
 	assert(ram_bank < cart->ram_banks);

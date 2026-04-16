@@ -1,6 +1,7 @@
 #include "gb.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include "log.h"
 
 static enum gb_result init_mem(struct gb *gb, struct gb_options *options);
@@ -11,6 +12,7 @@ static enum gb_result init_cart(struct gb *gb, struct gb_options *options);
 static enum gb_result init_joypad(struct gb *gb, struct gb_options *options);
 static enum gb_result init_interrupt(struct gb *gb, struct gb_options *options);
 static enum gb_result init_timer(struct gb *gb, struct gb_options *options);
+static enum gb_result init_serial(struct gb *gb, struct gb_options *options);
 static enum gb_result map_ioregs(struct gb *gb, struct gb_options *options);
 
 static void    gb_ioreg_write(void *target, uint16_t addr, uint8_t value);
@@ -21,6 +23,9 @@ enum gb_result gb_init(struct gb *gb, struct gb_options *options) {
     assert(options != NULL);
 
     enum gb_result result;
+
+    if ((result = init_interrupt(gb, options)) != GB_OK)
+        return result;
 
     if ((result = init_mem(gb, options)) != GB_OK)
         return result;
@@ -40,15 +45,30 @@ enum gb_result gb_init(struct gb *gb, struct gb_options *options) {
     if ((result = init_ram(gb, options)) != GB_OK)
         return result;
 
-    if ((result = init_interrupt(gb, options)) != GB_OK)
+    if ((result = init_timer(gb, options)) != GB_OK)
         return result;
 
-    if ((result = init_timer(gb, options)) != GB_OK)
+    if ((result = init_serial(gb, options)) != GB_OK)
         return result;
 
     if ((result = map_ioregs(gb, options)) != GB_OK)
         return result;
 
+    return GB_OK;
+}
+
+enum gb_result gb_run(struct gb *gb) {
+    gb->running = 1;
+
+    while (gb->running) {
+        cpu_tick(&gb->cpu, 1);
+    }
+
+    return GB_OK;
+}
+
+enum gb_result gb_stop(struct gb *gb) {
+    gb->running = 0;
     return GB_OK;
 }
 
@@ -59,7 +79,7 @@ enum gb_result gb_close(struct gb *gb) {
 }
 
 static enum gb_result init_cpu(struct gb *gb, struct gb_options *options) {
-    if (cpu_init(&gb->cpu, &gb->mem) != CPU_OK)
+    if (cpu_init(&gb->cpu, &gb->mem, &gb->interrupt) != CPU_OK)
         return GB_ERR;
 
     return GB_OK;
@@ -112,6 +132,12 @@ static enum gb_result init_timer(struct gb *gb, struct gb_options *options) {
     return GB_OK;
 }
 
+static enum gb_result init_serial(struct gb *gb, struct gb_options *options) {
+    serial_init(&gb->serial);
+
+    return GB_OK;
+}
+
 static enum gb_result map_ioregs(struct gb *gb, struct gb_options *options) {
     gb->ioregs.read_dev.target = gb;
     gb->ioregs.read_dev.read   = gb_ioreg_read;
@@ -157,6 +183,12 @@ static void gb_ioreg_write(void *target, uint16_t addr, uint8_t value) {
     if (addr == REG_ADDR_JOYP)
         return joypad_ioreg_joyp_write(&gb->joypad, value);
 
+    if (addr == REG_ADDR_SERIAL_TRANSFER_CONTROL)
+        return serial_reg_trans_ctrl_write(&gb->serial, value);
+
+    if (addr == REG_ADDR_SERIAL_TRANSFER_DATA)
+        return serial_reg_trans_data_write(&gb->serial, value);
+
     WARN("writing to ioreg (value=#%02x, addr=#%04x) has no implemented behaviour.", value, addr);
 }
 
@@ -186,6 +218,12 @@ static uint8_t gb_ioreg_read(void *target, uint16_t addr) {
 
     if (addr == REG_ADDR_JOYP)
         return joypad_ioreg_joyp_read(&gb->joypad);
+
+    if (addr == REG_ADDR_SERIAL_TRANSFER_CONTROL)
+        return gb->serial.trans_ctrl;
+
+    if (addr == REG_ADDR_SERIAL_TRANSFER_DATA)
+        return gb->serial.trans_data;
 
     WARN("reading from ioreg (addr=#%04x) has no implemented behaviour.", addr);
 

@@ -10,6 +10,7 @@
 #include "ioregs.h"
 #include "interrupt.h"
 #include "timer.h"
+#include "serial.h"
 
 enum gb_result {
     GB_OK  = 0,
@@ -27,6 +28,8 @@ struct gb {
     struct ioregs ioregs;
     struct interrupt interrupt;
     struct timer timer;
+    struct serial serial;
+    uint8_t running;
 };
 
 struct gb_options {
@@ -34,6 +37,8 @@ struct gb_options {
 };
 
 enum gb_result gb_init(struct gb *gb, struct gb_options *options);
+enum gb_result gb_run(struct gb *gb);
+enum gb_result gb_stop(struct gb *gb);
 enum gb_result gb_close(struct gb *gb);
 
 #endif
