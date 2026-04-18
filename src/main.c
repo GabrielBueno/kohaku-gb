@@ -13,7 +13,7 @@
 // BLARGGS CPU_INSTRS - "./roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
 //
 
-#define ROM "./roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
+#define ROM "./roms/tests/blargg/instr_timing/instr_timing.gb"
 // #define TEST
 
 #ifdef TEST

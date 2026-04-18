@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <stddef.h>
+#include "log.h"
 
 enum interrupt_result interrupt_init(struct interrupt *interrupt) {
     assert(interrupt != NULL);

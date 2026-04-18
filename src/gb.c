@@ -61,7 +61,9 @@ enum gb_result gb_run(struct gb *gb) {
     gb->running = 1;
 
     while (gb->running) {
-        cpu_tick(&gb->cpu, 1);
+        int cycles = cpu_tick(&gb->cpu, 1);
+
+        timer_tick(&gb->timer, cycles);
     }
 
     return GB_OK;
@@ -127,7 +129,7 @@ static enum gb_result init_interrupt(struct gb *gb, struct gb_options *options) 
 }
 
 static enum gb_result init_timer(struct gb *gb, struct gb_options *options) {
-    timer_init(&gb->timer);
+    timer_init(&gb->timer, &gb->interrupt);
 
     return GB_OK;
 }

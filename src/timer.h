@@ -2,15 +2,18 @@
 #define TIMER_H
 
 #include <stdint.h>
+#include "interrupt.h"
 
 struct timer {
-    uint8_t div;
+    struct interrupt *interrupt;
+    uint16_t counter;
     uint8_t tima;
     uint8_t tma;
     uint8_t tac;
 };
 
-void timer_init(struct timer *timer);
+void timer_init(struct timer *timer, struct interrupt *interrupt);
+void timer_tick(struct timer *timer, int cycles);
 
 void timer_reg_div_write(struct timer *timer, uint8_t value);
 uint8_t timer_reg_div_read(struct timer *timer);

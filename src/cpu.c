@@ -105,22 +105,23 @@ enum cpu_result cpu_close(struct cpu *cpu) {
 
 int cpu_tick(struct cpu *cpu, int cycles) {
     int taken = 0;
+    
+    if ((taken = check_interrupt(cpu)) > 0)
+        return taken;
 
-    while (taken < cycles) {
-        taken += check_interrupt(cpu);
-        taken += exec_next_instr(cpu);
-    }
-
-    return taken;
+    return exec_next_instr(cpu);
 }
 
 static int check_interrupt(struct cpu *cpu) {
-    if (cpu->interrupt->master_enable == 0)
-        return 0;
-
     uint8_t requested = 0x1f & cpu->interrupt->requested;
     uint8_t enabled   = 0x1f & cpu->interrupt->enabled;
     uint8_t to_exec   = requested & enabled;
+
+    if (cpu->halt && to_exec)
+        cpu->halt = 0;
+
+    if (cpu->interrupt->master_enable == 0)
+        return 0;
 
     if (to_exec == 0)
         return 0;
@@ -152,7 +153,7 @@ static int check_interrupt(struct cpu *cpu) {
     cpu->interrupt->master_enable = 0;
     cpu->interrupt->requested    &= ~to_exec;
 
-    return 5;
+    return 20;
 }
 
 //
@@ -174,6 +175,9 @@ static int exec_next_instr(struct cpu *cpu) {
     // if (emu->cur_opcode_hist >= OPCODE_HISTORY) {
     //     emu->cur_opcode_hist = 0;
     // }
+
+    if (cpu->halt)
+        return 4;
     
     uint16_t pc     = cpu->PC;
     uint8_t  opcode = mem_read8(cpu->mem, pc);
