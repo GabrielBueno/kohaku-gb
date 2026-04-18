@@ -10,6 +10,7 @@ struct timer {
     uint8_t tima;
     uint8_t tma;
     uint8_t tac;
+    uint8_t tima_overflow;
 };
 
 void timer_init(struct timer *timer, struct interrupt *interrupt);

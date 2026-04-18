@@ -391,7 +391,7 @@ static int exec_next_instr(struct cpu *cpu) {
 
     case 0x18: { //JR {8bit}
         cpu->PC = (uint16_t)(cpu->PC + 2 + (int16_t)((int8_t)mem_read8(cpu->mem, pc+1)));
-        return 8;
+        return 12;
     }
 
     case 0x19: { //ADD HL, DE
@@ -1075,37 +1075,37 @@ static int exec_next_instr(struct cpu *cpu) {
     case 0x70: { //LD (HL), B
         mem_write8(cpu->mem, CPU_HL(cpu), cpu->B);
         cpu->PC += 1;
-        return 4;
+        return 8;
     }
 
     case 0x71: { //LD (HL), C
         mem_write8(cpu->mem, CPU_HL(cpu), cpu->C);
         cpu->PC += 1;
-        return 4;
+        return 8;
     }
 
     case 0x72: { //LD (HL), D
         mem_write8(cpu->mem, CPU_HL(cpu), cpu->D);
         cpu->PC += 1;
-        return 4;
+        return 8;
     }
 
     case 0x73: { //LD (HL), E
         mem_write8(cpu->mem, CPU_HL(cpu), cpu->E);
         cpu->PC += 1;
-        return 4;
+        return 8;
     }
 
     case 0x74: { //LD (HL), H
         mem_write8(cpu->mem, CPU_HL(cpu), cpu->H);
         cpu->PC += 1;
-        return 4;
+        return 8;
     }
 
     case 0x75: { //LD (HL), L
         mem_write8(cpu->mem, CPU_HL(cpu), cpu->L);
         cpu->PC += 1;
-        return 4;
+        return 8;
     }
 
     case 0x76: { //HALT
@@ -1978,7 +1978,7 @@ static int exec_next_instr(struct cpu *cpu) {
     case 0xc3: { //JP {16bit}
         cpu->PC = mem_read16(cpu->mem, pc+1);
         // printf("JP to %04x\n", cpu->PC);
-        return 12;
+        return 16;
     }
 
     case 0xc4: { //CALL NZ, {16bit}
@@ -2740,7 +2740,7 @@ static int exec_next_instr(struct cpu *cpu) {
             CPU_SET_Z(cpu, BIT_N(mem, 0) == 0);
             CPU_SET_N(cpu, 0);
             CPU_SET_H(cpu, 1);
-            return 16;
+            return 12;
         }
 
         case 0x47: { // BIT 0, A
@@ -2797,7 +2797,7 @@ static int exec_next_instr(struct cpu *cpu) {
             CPU_SET_Z(cpu, BIT_N(mem, 1) == 0);
             CPU_SET_N(cpu, 0);
             CPU_SET_H(cpu, 1);
-            return 16;
+            return 12;
         }
 
         case 0x4f: { // BIT 1, A
@@ -2854,7 +2854,7 @@ static int exec_next_instr(struct cpu *cpu) {
             CPU_SET_Z(cpu, BIT_N(mem, 2) == 0);
             CPU_SET_N(cpu, 0);
             CPU_SET_H(cpu, 1);
-            return 16;
+            return 12;
         }
 
         case 0x57: { // BIT 2, A
@@ -2911,7 +2911,7 @@ static int exec_next_instr(struct cpu *cpu) {
             CPU_SET_Z(cpu, BIT_N(mem, 3) == 0);
             CPU_SET_N(cpu, 0);
             CPU_SET_H(cpu, 1);
-            return 16;
+            return 12;
         }
 
         case 0x5f: { // BIT 3, A
@@ -2968,7 +2968,7 @@ static int exec_next_instr(struct cpu *cpu) {
             CPU_SET_Z(cpu, BIT_N(mem, 4) == 0);
             CPU_SET_N(cpu, 0);
             CPU_SET_H(cpu, 1);
-            return 16;
+            return 12;
         }
 
         case 0x67: { // BIT 4, A
@@ -3025,7 +3025,7 @@ static int exec_next_instr(struct cpu *cpu) {
             CPU_SET_Z(cpu, BIT_N(mem, 5) == 0);
             CPU_SET_N(cpu, 0);
             CPU_SET_H(cpu, 1);
-            return 16;
+            return 12;
         }
 
         case 0x6f: { // BIT 5, A
@@ -3082,7 +3082,7 @@ static int exec_next_instr(struct cpu *cpu) {
             CPU_SET_Z(cpu, BIT_N(mem, 6) == 0);
             CPU_SET_N(cpu, 0);
             CPU_SET_H(cpu, 1);
-            return 16;
+            return 12;
         }
 
         case 0x77: { // BIT 6, A
@@ -3139,7 +3139,7 @@ static int exec_next_instr(struct cpu *cpu) {
             CPU_SET_Z(cpu, BIT_N(mem, 7) == 0);
             CPU_SET_N(cpu, 0);
             CPU_SET_H(cpu, 1);
-            return 16;
+            return 12;
         }
 
         case 0x7f: { // BIT 7, A
@@ -3907,10 +3907,10 @@ static int exec_next_instr(struct cpu *cpu) {
     case 0xd2: { //JP NC, {16bit}
         if (!CPU_CARRY(cpu)) {
             cpu->PC = mem_read16(cpu->mem, pc+1);
-            return 12;
+            return 16;
         } else {
             cpu->PC += 3;
-            return 16;
+            return 12;
         }
     }
 
@@ -3972,10 +3972,10 @@ static int exec_next_instr(struct cpu *cpu) {
             uint8_t msb = mem_read8(cpu->mem, cpu->SP);
             cpu->SP   += 1;
             cpu->PC    = BYTE_16BIT(msb, lsb);
-            return 8;
+            return 20;
         } else {
             cpu->PC += 1;
-            return 20;
+            return 8;
         }
     }
 
@@ -4237,7 +4237,7 @@ static int exec_next_instr(struct cpu *cpu) {
     }
 
     case 0xfb: { //EI
-        cpu->interrupt->master_enable = 2;
+        cpu->interrupt->master_enable = 1;
         cpu->PC += 1;
         return 4;
     }

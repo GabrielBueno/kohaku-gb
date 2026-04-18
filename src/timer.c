@@ -13,6 +13,7 @@ void timer_init(struct timer *timer, struct interrupt *interrupt) {
     timer->tac       = 0;
     timer->tima      = 0;
     timer->tma       = 0;
+    timer->tima_overflow = 0;
 }
 
 void timer_tick(struct timer *timer, int cycles) {
@@ -21,6 +22,12 @@ void timer_tick(struct timer *timer, int cycles) {
     if (!(tac & 0b100)) {
         timer->counter += cycles;
         return;
+    }
+
+    if (timer->tima_overflow) {
+        timer->tima_overflow = 0;
+        timer->tima = timer->tma;
+        interrupt_request(timer->interrupt, INTERRUPT_TIMER, INTERRUPT_REQUESTED);
     }
 
     static uint16_t counter_tima_masks[] = { 1<<9, 1<<3, 1<<5, 1<<7 };
@@ -41,8 +48,9 @@ void timer_tick(struct timer *timer, int cycles) {
 
         if (was_high && !is_high) {
             if (tima == 0xff) {
-                tima = tma;
-                interrupt_request(timer->interrupt, INTERRUPT_TIMER, INTERRUPT_REQUESTED);
+                timer->tima_overflow = 1;
+                timer->tima = 0;
+                tima = 0;
             } else {
                 tima++;
             }
