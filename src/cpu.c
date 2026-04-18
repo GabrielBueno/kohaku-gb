@@ -3,6 +3,10 @@
 #include <stddef.h>
 #include <assert.h>
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
 #include "macros.h"
 #include "log.h"
 
@@ -69,6 +73,7 @@
 #define CPU_SET_H_REG16_SUM_SIGNED(CPU, LEFT, RIGHT) CPU_SET_H(CPU, (((0xff&(int16_t)LEFT) + (0xff&(int16_t)RIGHT)) & 0xff00))
 #define CPU_SET_C_REG16_SUM_SIGNED(CPU, LEFT, RIGHT) CPU_SET_C(CPU, ((((int32_t)LEFT) + ((int32_t)RIGHT)) & 0xff0000))
 
+static int check_interrupt(struct cpu *cpu);
 static int exec_next_instr(struct cpu *cpu);
 
 enum cpu_result cpu_init(struct cpu *cpu, struct mem *mem, struct interrupt *interrupt) {
@@ -101,10 +106,53 @@ enum cpu_result cpu_close(struct cpu *cpu) {
 int cpu_tick(struct cpu *cpu, int cycles) {
     int taken = 0;
 
-    while (taken < cycles)
+    while (taken < cycles) {
+        taken += check_interrupt(cpu);
         taken += exec_next_instr(cpu);
+    }
 
     return taken;
+}
+
+static int check_interrupt(struct cpu *cpu) {
+    if (cpu->interrupt->master_enable == 0)
+        return 0;
+
+    uint8_t requested = 0x1f & cpu->interrupt->requested;
+    uint8_t enabled   = 0x1f & cpu->interrupt->enabled;
+    uint8_t to_exec   = requested & enabled;
+
+    if (to_exec == 0)
+        return 0;
+
+    // gets the least significant bit set on `to_exec`.
+    to_exec &= -to_exec;
+
+    static const uint16_t call_addrs[] = { 0x40, 0x48, 0x50, 0x58, 0x60 };
+    int idx;
+
+    #if defined(_MSC_VER)
+        unsigned long _idx;
+        _BitScanForward(&_idx, to_exec);
+
+        idx = (int)_idx;
+    #else
+        idx = __builtin_ctz(to_exec);
+    #endif
+
+    assert(idx >= 0 && idx < 5);
+
+    uint16_t call_addr = call_addrs[idx];
+
+    cpu->SP -= 2;
+    mem_write8(cpu->mem, cpu->SP + 1, (cpu->PC>>8) & 0xff);
+    mem_write8(cpu->mem, cpu->SP, cpu->PC&0xff);
+
+    cpu->PC                       = call_addr;
+    cpu->interrupt->master_enable = 0;
+    cpu->interrupt->requested    &= ~to_exec;
+
+    return 5;
 }
 
 //
@@ -112,55 +160,6 @@ int cpu_tick(struct cpu *cpu, int cycles) {
 //
 
 static int exec_next_instr(struct cpu *cpu) {
-    // uint8_t int_flag   = mem_read8(cpu->mem, MEMMAP_IF);
-    // uint8_t int_enable = mem_read8(cpu->mem, MEMMAP_IE);
-
-    // uint8_t int_req = int_enable & int_flag;
-
-    // if (cpu->halt) {
-    //     if (int_req) {
-    //         cpu->halt = 0;
-    //     } else {
-    //         return 1;
-    //}
-    //     }
-    // }
-
-    // if (cpu->interrupt_enabled == 0x01) {
-    //     uint16_t int_addr = 0x00;
-
-    //     if (int_req & CPU_INT_VBLANK) {
-    //         int_addr = 0x40;
-    //         mem_write8(cpu->mem, MEMMAP_IF, int_flag & ~CPU_INT_VBLANK);
-    //     } else if (int_req & CPU_INT_LCD_STAT) {
-    //         int_addr = 0x48;
-    //         mem_write8(cpu->mem, MEMMAP_IF, int_flag & ~CPU_INT_LCD_STAT);
-    //     } else if (int_req & CPU_INT_TIMER) {
-    //         int_addr = 0x50;
-    //         mem_write8(cpu->mem, MEMMAP_IF, int_flag & ~CPU_INT_TIMER);
-    //     } else if (int_req & CPU_INT_SERIAL) {
-    //         int_addr = 0x58;
-    //         mem_write8(cpu->mem, MEMMAP_IF, int_flag & ~CPU_INT_SERIAL);
-    //     } else if (int_req & CPU_INT_JOYPAD) {
-    //         int_addr = 0x60;
-    //         mem_write8(cpu->mem, MEMMAP_IF, int_flag & ~CPU_INT_JOYPAD);
-    //     }
-
-    //     if (int_addr) {
-    //         cpu->SP -= 1;
-    //         mem_write8(cpu->mem, cpu->SP, (cpu->PC>>8) & 0xff);
-    //         cpu->SP -= 1;
-    //         mem_write8(cpu->mem, cpu->SP, cpu->PC&0xff);
-
-    //         cpu->PC = int_addr;
-    //         cpu->interrupt_enabled = 0;
-    //     }
-    // }
-
-    // if (cpu->interrupt_enabled > 0x01) {
-    //     cpu->interrupt_enabled -= 1;
-    // }
-
     // struct cpu prev_state = cpu;
 
     // uint16_t pc     = cpu->PC;
