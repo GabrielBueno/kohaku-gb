@@ -4,17 +4,18 @@
 #include <time.h>
 #include <stdlib.h>
 
-#include "file.h"
-#include "gb.h"
-#include "cartridge.h"
 #include "log.h"
+#include "file.h"
+#include "cartridge.h"
+#include "gb.h"
+#include "window.h"
 
 //
 // POKEMON - "./roms/pokemon_red.gb"
 // BLARGGS CPU_INSTRS - "./roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
 //
 
-#define ROM "./roms/tests/blargg/interrupt_time/interrupt_time.gb"
+#define ROM "./roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
 // #define TEST
 
 #ifdef TEST
@@ -22,11 +23,12 @@
 #endif
 
 struct gb         gb;
+struct window     window;
 struct gb_options gb_opt;
 
 void sighandler(int signal) {
 	fprintf(stderr, "SIGINT\n");
-	gb_stop(&gb);
+	window.should_quit = 1;
 }
 
 int main() {
@@ -48,10 +50,21 @@ int main() {
 
 	cart_info_print(&gb.cart, &gb.cart_info);
 
-	if (gb_run(&gb) != GB_OK)
-		FATAL("fatal error during execution");
+	if (window_init(&window, &gb, WINDOW_DEFAULT) != WINDOW_OK)
+		FATAL("failed to initialize window");
+	
+	while (!window.should_quit) {
+		int cycles = 0;
+
+		while (cycles < 70224)
+			cycles += gb_tick(&gb);
+
+		window_poll_events(&window);
+		window_render(&window);
+	}
 
 	gb_close(&gb);
+	window_close(&window);
 
 	return 0;
 }

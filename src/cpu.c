@@ -103,7 +103,7 @@ enum cpu_result cpu_close(struct cpu *cpu) {
     return CPU_OK;
 }
 
-int cpu_tick(struct cpu *cpu, int cycles) {
+int cpu_tick(struct cpu *cpu) {
     int taken = 0;
     
     if ((taken = check_interrupt(cpu)) > 0)

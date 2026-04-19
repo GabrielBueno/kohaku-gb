@@ -11,6 +11,7 @@
 #include "interrupt.h"
 #include "timer.h"
 #include "serial.h"
+#include "window.h"
 
 enum gb_result {
     GB_OK  = 0,
@@ -37,7 +38,7 @@ struct gb_options {
 };
 
 enum gb_result gb_init(struct gb *gb, struct gb_options *options);
-enum gb_result gb_run(struct gb *gb);
+int gb_tick(struct gb *gb);
 enum gb_result gb_stop(struct gb *gb);
 enum gb_result gb_close(struct gb *gb);
 

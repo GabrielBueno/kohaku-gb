@@ -35,6 +35,6 @@ struct cpu {
 enum cpu_result cpu_init(struct cpu *cpu, struct mem *mem, struct interrupt *interrupt);
 enum cpu_result cpu_close(struct cpu *cpu);
 
-int cpu_tick(struct cpu *cpu, int cycles);
+int cpu_tick(struct cpu *cpu);
 
 #endif

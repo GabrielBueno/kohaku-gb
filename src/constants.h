@@ -1,0 +1,7 @@
+#ifndef CONSTANTS_H
+#define CONSTANTS_H
+
+#define GAMEBOY_LCD_WIDTH  160
+#define GAMEBOY_LCD_HEIGHT 144
+
+#endif

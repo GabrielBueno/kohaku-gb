@@ -57,16 +57,12 @@ enum gb_result gb_init(struct gb *gb, struct gb_options *options) {
     return GB_OK;
 }
 
-enum gb_result gb_run(struct gb *gb) {
-    gb->running = 1;
+int gb_tick(struct gb *gb) {
+    int cycles = cpu_tick(&gb->cpu);
 
-    while (gb->running) {
-        int cycles = cpu_tick(&gb->cpu, 1);
+    timer_tick(&gb->timer, cycles);
 
-        timer_tick(&gb->timer, cycles);
-    }
-
-    return GB_OK;
+    return cycles;
 }
 
 enum gb_result gb_stop(struct gb *gb) {
