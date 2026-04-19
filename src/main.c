@@ -6,6 +6,7 @@
 
 #include "file.h"
 #include "gb.h"
+#include "cartridge.h"
 #include "log.h"
 
 //
@@ -13,7 +14,7 @@
 // BLARGGS CPU_INSTRS - "./roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
 //
 
-#define ROM "./roms/tests/blargg/instr_timing/instr_timing.gb"
+#define ROM "./roms/tests/blargg/interrupt_time/interrupt_time.gb"
 // #define TEST
 
 #ifdef TEST
@@ -44,6 +45,8 @@ int main() {
 
 	if (gb_init(&gb, &gb_opt) != GB_OK)
 		FATAL("failed to initialize gb");
+
+	cart_info_print(&gb.cart, &gb.cart_info);
 
 	if (gb_run(&gb) != GB_OK)
 		FATAL("fatal error during execution");

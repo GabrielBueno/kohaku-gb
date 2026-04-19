@@ -16,8 +16,12 @@ static enum cart_result map_write_pages(struct cartridge *cart);
 static void map_first_bank(struct cartridge *cart);
 static void ch_rom_bank(struct cartridge *cart, int rom_bank);
 static void ch_ram_bank(struct cartridge *cart, int ram_bank);
+static void map_init_ram(struct cartridge *cart);
 static void disable_ram(struct cartridge *cart);
 static void enable_ram(struct cartridge *cart);
+
+static uint8_t ram_read(void *target, uint16_t addr);
+static void ram_write(void *target, uint16_t addr, uint8_t value);
 
 static void rom_only_write(void *target, uint16_t addr, uint8_t value);
 static void mbc1_write(void *target, uint16_t addr, uint8_t value);
@@ -46,6 +50,10 @@ enum cart_result cart_info(struct cartridge *cart, struct cartridge_info *info) 
 	info->type = cart->cart_type;
 
 	return CART_OK;
+}
+
+void cart_info_print(struct cartridge *cart, struct cartridge_info *info) {
+	fprintf(stderr, "%s\nCART TYPE: #%02x\nROM BANKS: %d\nRAM BANKS: %d\n", info->title, info->type, cart->rom_banks, cart->ram_banks);
 }
 
 static enum cart_result init(struct cartridge *cart, struct file file, struct mem *mem) {
@@ -169,6 +177,7 @@ static enum cart_result map_addresses(struct cartridge *cart) {
 		return result;
 
 	map_first_bank(cart);
+	map_init_ram(cart);
 	
 	ch_rom_bank(cart, cart->current_rom_bank);
 	ch_ram_bank(cart, cart->current_ram_bank);
@@ -234,6 +243,23 @@ static void ch_rom_bank(struct cartridge *cart, int rom_bank) {
 	cart->current_rom_bank = rom_bank;
 }
 
+static void map_init_ram(struct cartridge *cart) {
+	cart->ram_write_dev.target = cart;
+	cart->ram_write_dev.write  = ram_write;
+	cart->ram_read_dev.target  = cart;
+	cart->ram_read_dev.read    = ram_read;
+
+	struct mem_read_dev  *read_dev  = &cart->ram_read_dev;
+	struct mem_write_dev *write_dev = &cart->ram_write_dev;
+
+	for (uint8_t page = 0xa0; page <= 0xbf; page++) {
+		cart->mem->read_dev[page] = read_dev;
+		cart->mem->read_direct[page] = NULL;
+		cart->mem->write_dev[page] = write_dev;
+		cart->mem->write_direct[page] = NULL;
+	}
+}
+
 static void ch_ram_bank(struct cartridge *cart, int ram_bank) {
 	if (cart->ram_banks == 0)
 		return;
@@ -243,30 +269,37 @@ static void ch_ram_bank(struct cartridge *cart, int ram_bank) {
 	assert(ram_bank < cart->ram_banks);
 
 	cart->current_ram_bank = ram_bank;
-
-	if (!cart->ram_enable)
-		return;
-
-	int base_address = 0xa000 * ram_bank;
-
-	for (int page = 0xa0; page < 0xc0; page++)
-		cart->mem->read_direct[page] = &cart->ram[base_address + ((page - 0xa0) << 8)];
 }
 
 static void disable_ram(struct cartridge *cart) {
 	assert(cart != NULL);
 
 	cart->ram_enable = 0;
-
-	for (int page = 0xa0; page < 0xc0; page++) 
-		cart->mem->read_direct[page] = ram_disabled_page;
 }
 
 static void enable_ram(struct cartridge *cart) {
+	DEBUG("enabling ram");
 	assert(cart != NULL);
 
 	cart->ram_enable = 1;
 	ch_ram_bank(cart, cart->current_ram_bank);
+}
+
+static uint8_t ram_read(void *target, uint16_t addr) {
+	struct cartridge *cart = (struct cartridge*)target;
+
+	if (cart->ram_enable)
+		return cart->ram[(8*1024*cart->current_ram_bank) + addr]; 
+
+	return 0xff;
+}
+
+static void ram_write(void *target, uint16_t addr, uint8_t value) {
+	DEBUG("writing to cart ram");
+	struct cartridge *cart = (struct cartridge*)target;
+
+	if (cart->ram_enable)
+		cart->ram[(8*1024*cart->current_ram_bank) + addr] = value;
 }
 
 static void rom_only_write(void *target, uint16_t addr, uint8_t value) {
