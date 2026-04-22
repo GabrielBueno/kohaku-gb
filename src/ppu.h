@@ -13,12 +13,10 @@ enum ppu_result {
 
 struct ppu {
     struct {
-        uint8_t map1[256 * 256];
-        uint8_t map2[256 * 256];
-        uint8_t screen[GAMEBOY_LCD_HEIGHT * GAMEBOY_LCD_WIDTH];
+        uint8_t bg[256 * 256 * 3];
+        uint8_t screen[GAMEBOY_LCD_HEIGHT * GAMEBOY_LCD_WIDTH * 3];
     } textures;
 
-    uint8_t screen[GAMEBOY_LCD_WIDTH * GAMEBOY_LCD_HEIGHT * 3];
     uint8_t vram[8 * 1024];
     uint8_t oam[256];
     struct mem *mem;

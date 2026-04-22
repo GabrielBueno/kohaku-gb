@@ -15,15 +15,29 @@
 #define STAT_FLAG_MODE      0x03
 
 #define CTRL_FLAG_BG_AND_WINDOW_ADDRESING_MODE 0x10
+#define CTRL_FLAG_BG_TILE_MAP_AREA             0x08
+#define CTRL_FLAG_WIN_TILE_MAP_AREA            0x40
+#define CTRL_FLAG_BG_WIN_ENABLE                0x01
 
 #define ADDRESSING_MODE_8000 1
 #define ADDRESSING_MODE_8800 0
+
+static uint8_t pallete[][3] = {
+    { 0x33, 0x33, 0x33, },
+    { 0x99, 0x99, 0x99, },
+    { 0xee, 0xee, 0xee, },
+    { 0xff, 0xff, 0xff, },
+};
 
 static enum ppu_result map_addresses(struct ppu *ppu, struct mem *mem);
 
 static void get_tile(struct ppu *ppu, uint8_t index, uint8_t method, uint8_t *tile_data);
 static void get_obj_tile(struct ppu *ppu, uint8_t index, uint8_t *tile_data);
 static void get_bgwin_tile(struct ppu *ppu, uint8_t index, uint8_t *tile_data);
+
+static void render_bg(struct ppu *ppu);
+static void render_win(struct ppu *ppu);
+static void render_obj(struct ppu *ppu);
 
 enum ppu_result ppu_init(struct ppu *ppu, struct mem *mem, struct interrupt *interrupt) {
     assert(ppu       != NULL);
@@ -153,7 +167,59 @@ enum ppu_result map_addresses(struct ppu *ppu, struct mem *mem) {
     return PPU_OK;
 }
 
-void get_tile(struct ppu *ppu, uint8_t index, uint8_t addressing, uint8_t *tile_data) {
+static void render_bg(struct ppu *ppu) {
+    uint8_t  lcdc       = ppu->lcd_ctrl;
+    uint8_t  bgenable   = (lcdc & CTRL_FLAG_BG_WIN_ENABLE);
+    uint8_t  addressing = (lcdc & CTRL_FLAG_BG_AND_WINDOW_ADDRESING_MODE) ? ADDRESSING_MODE_8000 : ADDRESSING_MODE_8800;
+    uint16_t from       = (lcdc & CTRL_FLAG_BG_TILE_MAP_AREA) ? 0x9800 : 0x9c00;
+    uint16_t to         = from + 1024;
+    uint8_t *map        = ppu->textures.bg;
+
+    if (!bgenable) {
+        for (int i = 0; i < 256*256*3; i++)
+            ppu->textures.bg[i] = 0xff;
+
+        return;
+    }
+
+    uint8_t tile_data[16];
+
+    for (uint16_t addr = from; addr < to; addr++) {
+        uint8_t index = mem_read8(ppu->mem, addr);
+
+        int texture_x = 0;
+        int texture_y = 0;
+
+        get_tile(ppu, index, addressing, tile_data);
+
+        for (int tile_idx = 0; tile_idx < 16; tile_idx += 2) {
+            uint8_t lsb = tile_data[tile_idx];
+            uint8_t msb = tile_data[tile_idx+1];
+
+            for (int bit = 7; bit >= 1; bit--) {
+                uint8_t *color = pallete[(((msb >> bit) << 1) | (lsb >> bit)) & 0x3];
+
+                int x = (texture_x + bit) * 3;
+                int y = (texture_y + (tile_idx / 2)) * 3;
+                int i = (y * 256) + x;
+
+                map[i]   = color[0];
+                map[i+1] = color[1];
+                map[i+2] = color[2];
+            }
+        }
+    }
+}
+
+static void render_win(struct ppu *ppu) {
+
+}
+
+static void render_obj(struct ppu *ppu) {
+
+}
+
+static void get_tile(struct ppu *ppu, uint8_t index, uint8_t addressing, uint8_t *tile_data) {
     uint16_t base_addr = 0x8000;
     int      offset    = 16*index;
 
@@ -168,8 +234,8 @@ void get_tile(struct ppu *ppu, uint8_t index, uint8_t addressing, uint8_t *tile_
         uint8_t lsb = mem_read8(ppu->mem, addr+i);
         uint8_t msb = mem_read8(ppu->mem, addr+i+1);
 
-        vendas
-        
+        tile_data[i]   = lsb;
+        tile_data[i+1] = msb;
     }
 }
 
