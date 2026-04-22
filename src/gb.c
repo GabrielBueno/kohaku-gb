@@ -61,6 +61,7 @@ int gb_tick(struct gb *gb) {
     int cycles = cpu_tick(&gb->cpu);
 
     timer_tick(&gb->timer, cycles);
+    ppu_tick(&gb->ppu, cycles);
 
     return cycles;
 }
@@ -84,7 +85,7 @@ static enum gb_result init_cpu(struct gb *gb, struct gb_options *options) {
 }
 
 static enum gb_result init_ppu(struct gb *gb, struct gb_options *options) {
-    if (ppu_init(&gb->ppu, &gb->mem) != PPU_OK)
+    if (ppu_init(&gb->ppu, &gb->mem, &gb->interrupt) != PPU_OK)
         return GB_ERR;
 
     return GB_OK;
@@ -187,6 +188,66 @@ static void gb_ioreg_write(void *target, uint16_t addr, uint8_t value) {
     if (addr == REG_ADDR_SERIAL_TRANSFER_DATA)
         return serial_reg_trans_data_write(&gb->serial, value);
 
+    if (addr == REG_ADDR_PPU_LCD_CTRL) {
+        gb->ppu.lcd_ctrl = value;
+        return;
+    }
+
+    if (addr == REG_ADDR_PPU_LCD_STAT) {
+        gb->ppu.lcd_stat = value & 0b01111100;
+        return;
+    }
+
+    if (addr == REG_ADDR_PPU_SCY) {
+        gb->ppu.scy = value;
+        return;
+    }
+
+    if (addr == REG_ADDR_PPU_SCX) {
+        gb->ppu.scx = value;
+        return;
+    }
+
+    if (addr == REG_ADDR_PPU_LY) {
+        gb->ppu.ly = value;
+        return;
+    }
+
+    if (addr == REG_ADDR_PPU_LYC) {
+        gb->ppu.lyc = value;
+        return;
+    }
+
+    if (addr == REG_ADDR_PPU_DMA) {
+        ppu_dma(&gb->ppu, value);
+        return;
+    }
+
+    if (addr == REG_ADDR_PPU_BGP) {
+        gb->ppu.bgp = value;
+        return;
+    }
+
+    if (addr == REG_ADDR_PPU_OBP0) {
+        gb->ppu.obp0 = value;
+        return;
+    }
+
+    if (addr == REG_ADDR_PPU_OBP1) {
+        gb->ppu.obp1 = value;
+        return;
+    }
+
+    if (addr == REG_ADDR_PPU_WY) {
+        gb->ppu.wy = value;
+        return;
+    }
+
+    if (addr == REG_ADDR_PPU_WX) {
+        gb->ppu.wx = value;
+        return;
+    }
+
     WARN("writing to ioreg (value=#%02x, addr=#%04x) has no implemented behaviour.", value, addr);
 }
 
@@ -222,6 +283,42 @@ static uint8_t gb_ioreg_read(void *target, uint16_t addr) {
 
     if (addr == REG_ADDR_SERIAL_TRANSFER_DATA)
         return gb->serial.trans_data;
+
+    if (addr == REG_ADDR_PPU_LCD_CTRL)
+        return gb->ppu.lcd_ctrl;
+
+    if (addr == REG_ADDR_PPU_LCD_STAT)
+        return gb->ppu.lcd_stat;
+
+    if (addr == REG_ADDR_PPU_SCY)
+        return gb->ppu.scy;
+
+    if (addr == REG_ADDR_PPU_SCX)
+        return gb->ppu.scx;
+
+    if (addr == REG_ADDR_PPU_LY)
+        return gb->ppu.ly;
+
+    if (addr == REG_ADDR_PPU_LYC)
+        return gb->ppu.lyc;
+
+    if (addr == REG_ADDR_PPU_DMA)
+        return 0x00;
+
+    if (addr == REG_ADDR_PPU_BGP)
+        return gb->ppu.bgp;
+
+    if (addr == REG_ADDR_PPU_OBP0)
+        return gb->ppu.obp0;
+
+    if (addr == REG_ADDR_PPU_OBP1)
+        return gb->ppu.obp1;
+
+    if (addr == REG_ADDR_PPU_WY)
+        return gb->ppu.wy;
+
+    if (addr == REG_ADDR_PPU_WX)
+        return gb->ppu.wx;
 
     WARN("reading from ioreg (addr=#%04x) has no implemented behaviour.", addr);
 
