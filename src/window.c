@@ -10,7 +10,8 @@
 static enum window_result init_game_window(struct window_game *game);
 static enum window_result init_debug_window(struct window_debug *debug, int show_debug);
 
-void render_game_window(struct window_game *game);
+static void render_game_window(struct window *win);
+static void render_debug_window(struct window *win);
 
 static enum window_result close_game_window(struct window_game *game);
 static enum window_result close_debug_window(struct window_debug *debug);
@@ -48,7 +49,9 @@ void window_poll_events(struct window *window) {
 }
 
 void window_render(struct window *window) {
-    render_game_window(&window->game);
+    ppu_render(&window->gb->ppu);
+    render_game_window(window);
+    render_debug_window(window);
 }
 
 enum window_result window_close(struct window *window) {
@@ -75,6 +78,8 @@ static enum window_result init_game_window(struct window_game *game) {
     if (texture == NULL)
         return WINDOW_ERR;
 
+    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_PIXELART);
+
     game->window      = window;
     game->renderer    = renderer;
     game->texture     = texture;
@@ -84,13 +89,61 @@ static enum window_result init_game_window(struct window_game *game) {
 }
 
 static enum window_result init_debug_window(struct window_debug *debug, int show_debug) {
+    SDL_Window *window = SDL_CreateWindow("kohaku.dbg", 1024, 1024, 0);
+
+    if (window == NULL)
+        return WINDOW_ERR;
+
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL);
+
+    if (renderer == NULL)
+        return WINDOW_ERR;
+
+    SDL_Texture *map1 = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 256, 256);
+
+    if (map1 == NULL)
+        return WINDOW_ERR;
+
+    SDL_Texture *map2 = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 256, 256);
+
+    if (map2 == NULL)
+        return WINDOW_ERR;
+
+    SDL_SetTextureScaleMode(map1, SDL_SCALEMODE_PIXELART);
+    SDL_SetTextureScaleMode(map2, SDL_SCALEMODE_PIXELART);
+
+    debug->window      = window;
+    debug->renderer    = renderer;
+    debug->map1        = map1;
+    debug->map2        = map2;
+    debug->initialized = 1;
+
     return WINDOW_OK;
 }
 
-void render_game_window(struct window_game *game) {
+static void render_game_window(struct window *win) {
+    struct window_game *game = &win->game;
+    struct ppu         *ppu  = &win->gb->ppu;
+
     SDL_RenderClear(game->renderer);
     SDL_RenderTexture(game->renderer, game->texture, NULL, NULL);
     SDL_RenderPresent(game->renderer);
+}
+
+static void render_debug_window(struct window *win) {
+    struct window_debug *debug = &win->debug;
+    struct ppu          *ppu   = &win->gb->ppu;
+
+    void *target;
+    int pitch;
+
+    SDL_LockTexture(debug->map1, NULL, &target, &pitch);
+    memcpy(target, ppu->textures.bg, 256*256*3);
+    SDL_UnlockTexture(debug->map1);
+
+    SDL_RenderClear(debug->renderer);
+    SDL_RenderTexture(debug->renderer, debug->map1, NULL, NULL);
+    SDL_RenderPresent(debug->renderer);
 }
 
 static enum window_result close_game_window(struct window_game *game) {

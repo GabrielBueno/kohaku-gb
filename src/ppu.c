@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <assert.h>
+#include "log.h"
 
 #define DOTS_PER_SCANLINE 460
 #define DOTS_PER_FRAME    70224
@@ -133,7 +134,7 @@ void ppu_tick(struct ppu *ppu, int cycles) {
 }
 
 void ppu_render(struct ppu *ppu) {
-
+    render_bg(ppu);
 }
 
 void ppu_dma(struct ppu *ppu, uint8_t value) {
@@ -167,11 +168,16 @@ enum ppu_result map_addresses(struct ppu *ppu, struct mem *mem) {
     return PPU_OK;
 }
 
+static void noise_render_bg(struct ppu *ppu) {
+    for (int i = 0; i < 256*256*3; i++)
+        ppu->textures.bg[i] = rand() % 256;
+}
+
 static void render_bg(struct ppu *ppu) {
     uint8_t  lcdc       = ppu->lcd_ctrl;
     uint8_t  bgenable   = (lcdc & CTRL_FLAG_BG_WIN_ENABLE);
     uint8_t  addressing = (lcdc & CTRL_FLAG_BG_AND_WINDOW_ADDRESING_MODE) ? ADDRESSING_MODE_8000 : ADDRESSING_MODE_8800;
-    uint16_t from       = (lcdc & CTRL_FLAG_BG_TILE_MAP_AREA) ? 0x9800 : 0x9c00;
+    uint16_t from       = (lcdc & CTRL_FLAG_BG_TILE_MAP_AREA) ? 0x9c00 : 0x9800;
     uint16_t to         = from + 1024;
     uint8_t *map        = ppu->textures.bg;
 
@@ -186,22 +192,23 @@ static void render_bg(struct ppu *ppu) {
 
     for (uint16_t addr = from; addr < to; addr++) {
         uint8_t index = mem_read8(ppu->mem, addr);
-
-        int texture_x = 0;
-        int texture_y = 0;
+        
+        int tile_idx  = addr - from;
+        int texture_x = (tile_idx % 32) * 8;
+        int texture_y = (tile_idx / 32) * 8;
 
         get_tile(ppu, index, addressing, tile_data);
 
-        for (int tile_idx = 0; tile_idx < 16; tile_idx += 2) {
-            uint8_t lsb = tile_data[tile_idx];
-            uint8_t msb = tile_data[tile_idx+1];
+        for (int t = 0; t < 16; t += 2) {
+            uint8_t lsb = tile_data[t];
+            uint8_t msb = tile_data[t+1];
 
-            for (int bit = 7; bit >= 1; bit--) {
+            for (int bit = 7; bit >= 0; bit--) {
                 uint8_t *color = pallete[(((msb >> bit) << 1) | (lsb >> bit)) & 0x3];
 
-                int x = (texture_x + bit) * 3;
-                int y = (texture_y + (tile_idx / 2)) * 3;
-                int i = (y * 256) + x;
+                int x = (texture_x + (7 - bit)) * 3;
+                int y = (texture_y + (t / 2));
+                int i = (y * 256*3) + x;
 
                 map[i]   = color[0];
                 map[i+1] = color[1];
