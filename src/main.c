@@ -15,7 +15,8 @@
 // BLARGGS CPU_INSTRS - "./roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
 //
 
-#define ROM "./roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
+// #define ROM "./roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
+#define ROM "./roms/pokemon_red.gb"
 // #define TEST
 
 #ifdef TEST
@@ -60,7 +61,11 @@ int main() {
 			cycles += gb_tick(&gb);
 
 		window_poll_events(&window);
-		window_render(&window);
+
+		if (gb.ppu.vblank_ready_to_render) {
+			window_render(&window);
+			gb.ppu.vblank_ready_to_render = 0;
+		}
 	}
 
 	gb_close(&gb);

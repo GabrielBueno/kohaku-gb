@@ -49,9 +49,8 @@ void window_poll_events(struct window *window) {
 }
 
 void window_render(struct window *window) {
-    ppu_render(&window->gb->ppu);
     render_game_window(window);
-    render_debug_window(window);
+    // render_debug_window(window);
 }
 
 enum window_result window_close(struct window *window) {
@@ -124,6 +123,15 @@ static enum window_result init_debug_window(struct window_debug *debug, int show
 static void render_game_window(struct window *win) {
     struct window_game *game = &win->game;
     struct ppu         *ppu  = &win->gb->ppu;
+
+    uint8_t *framebuffer = ppu->textures.screen;
+
+    void *tx_target;
+    int pitch;
+
+    SDL_LockTexture(game->texture, NULL, &tx_target, &pitch);
+    memcpy(tx_target, framebuffer, 160*144*3);
+    SDL_UnlockTexture(game->texture);
 
     SDL_RenderClear(game->renderer);
     SDL_RenderTexture(game->renderer, game->texture, NULL, NULL);

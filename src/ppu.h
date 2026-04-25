@@ -36,13 +36,17 @@ struct ppu {
     uint8_t wx;
     uint8_t mode;
     uint8_t enabled;
+
+    uint8_t int_stat_requested;
+    uint8_t int_vblank_requested;
+    uint8_t int_stat_lyc_requested;
+    uint8_t vblank_ready_to_render;
 };
 
 enum ppu_result ppu_init(struct ppu *ppu, struct mem *mem, struct interrupt *interrupt);
 enum ppu_result ppu_close(struct ppu *ppu);
 
 void ppu_tick(struct ppu *ppu, int cycles);
-void ppu_render(struct ppu *ppu);
 void ppu_dma(struct ppu *ppu, uint8_t value);
 
 #endif

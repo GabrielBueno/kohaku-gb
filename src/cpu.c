@@ -126,6 +126,8 @@ static int check_interrupt(struct cpu *cpu) {
     if (to_exec == 0)
         return 0;
 
+    // DEBUG("INT recv: #%02x", to_exec);
+
     // gets the least significant bit set on `to_exec`.
     to_exec &= -to_exec;
 

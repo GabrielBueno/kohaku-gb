@@ -4,9 +4,7 @@
 #include <assert.h>
 #include "log.h"
 
-#define DOTS_PER_SCANLINE 460
-#define DOTS_PER_FRAME    70224
-#define LINES_PER_FRAME   153
+
 
 #define STAT_FLAG_LYC_INT   0x40
 #define STAT_FLAG_MODE2_INT 0x20
@@ -15,30 +13,33 @@
 #define STAT_FLAG_LYC_EQ_LY 0x04
 #define STAT_FLAG_MODE      0x03
 
+#define CTRL_FLAG_PPU_ENABLE                   0x80
+#define CTRL_FLAG_WIN_TILE_MAP_AREA            0x40
+#define CTRL_FLAG_WIN_ENABLE                   0x20
 #define CTRL_FLAG_BG_AND_WINDOW_ADDRESING_MODE 0x10
 #define CTRL_FLAG_BG_TILE_MAP_AREA             0x08
-#define CTRL_FLAG_WIN_TILE_MAP_AREA            0x40
+#define CTRL_FLAG_OBJ_SIZE                     0x04
+#define CTRL_FLAG_OBJ_ENABLE                   0x02
 #define CTRL_FLAG_BG_WIN_ENABLE                0x01
 
 #define ADDRESSING_MODE_8000 1
 #define ADDRESSING_MODE_8800 0
 
 static uint8_t pallete[][3] = {
-    { 0x33, 0x33, 0x33, },
-    { 0x99, 0x99, 0x99, },
-    { 0xee, 0xee, 0xee, },
-    { 0xff, 0xff, 0xff, },
+    { 0xf2, 0xe5, 0xd5, },
+    { 0xbf, 0x99, 0x95, },
+    { 0x8c, 0x5a, 0x5a, },
+    { 0x40, 0x01, 0x01, },
 };
 
+
 static enum ppu_result map_addresses(struct ppu *ppu, struct mem *mem);
+static uint16_t get_tile_address(uint8_t index, uint8_t method);
 
-static void get_tile(struct ppu *ppu, uint8_t index, uint8_t method, uint8_t *tile_data);
-static void get_obj_tile(struct ppu *ppu, uint8_t index, uint8_t *tile_data);
-static void get_bgwin_tile(struct ppu *ppu, uint8_t index, uint8_t *tile_data);
-
-static void render_bg(struct ppu *ppu);
-static void render_win(struct ppu *ppu);
-static void render_obj(struct ppu *ppu);
+static void render_scanline(struct ppu *ppu);
+static void render_scanline_bg(struct ppu *ppu, int ly);
+static void render_scanline_win(struct ppu *ppu, int ly);
+static void render_scanline_obj(struct ppu *ppu, int ly);
 
 enum ppu_result ppu_init(struct ppu *ppu, struct mem *mem, struct interrupt *interrupt) {
     assert(ppu       != NULL);
@@ -63,6 +64,10 @@ enum ppu_result ppu_init(struct ppu *ppu, struct mem *mem, struct interrupt *int
     ppu->line_dots  = 0;
     ppu->mode       = 2;
 
+    ppu->int_stat_requested     = 0;
+    ppu->int_vblank_requested   = 0;
+    ppu->vblank_ready_to_render = 0;
+
     enum ppu_result result;
 
     if ((result = map_addresses(ppu, mem)) != PPU_OK)
@@ -76,65 +81,72 @@ enum ppu_result ppu_close(struct ppu *ppu) {
 }
 
 void ppu_tick(struct ppu *ppu, int cycles) {
-    int line_dots   = ppu->line_dots;
-    int frame_dots  = ppu->frame_dots;
-    uint8_t stat    = ppu->lcd_stat;
-    uint8_t ly      = ppu->ly;
-    uint8_t lyc     = ppu->lyc;
-    uint8_t mode    = stat & STAT_FLAG_MODE;
-    uint8_t int_req = 0;
+    uint8_t lcdc = ppu->lcd_ctrl;
 
-    for (int t = 0; t < cycles; t++) {
-        line_dots  = (line_dots  + 1) % DOTS_PER_SCANLINE;
-        frame_dots = (frame_dots + 1) % DOTS_PER_FRAME;
+    while (cycles > 0) {
+        int remaining = 0;
 
-        if (frame_dots == 0)
-            ly = (ly + 1) % LINES_PER_FRAME;
-        
-        if (ly >= 144) {
-            mode = 1;
+        switch (ppu->mode) {
+        case 2: remaining = 80     - ppu->line_dots; break;
+        case 3: remaining = 80+172 - ppu->line_dots; break;
+        case 0: remaining = 456    - ppu->line_dots; break;
+        case 1: remaining = 456    - ppu->line_dots; break;
+        }
 
-            if ((stat & STAT_FLAG_MODE1_INT) && !int_req) {
-                interrupt_request(ppu->interrupt, INTERRUPT_LCD, INTERRUPT_REQUESTED);
-                int_req = 1;
+        int step = (cycles < remaining) ? cycles : remaining;
+
+        cycles          -= step;
+        ppu->line_dots  += step;
+        ppu->frame_dots += step;
+
+        if (ppu->line_dots >= 456) {
+            ppu->line_dots -= 456;
+            ppu->ly++;
+
+            if (ppu->ly == 144) {
+                ppu->mode                   = 1;
+                ppu->vblank_ready_to_render = 1;
+
+                interrupt_request(ppu->interrupt, INTERRUPT_VBLANK, INTERRUPT_REQUESTED);
+
+                if (ppu->lcd_stat & STAT_FLAG_MODE1_INT)
+                    interrupt_request(ppu->interrupt, INTERRUPT_LCD, INTERRUPT_REQUESTED);
+            } else if (ppu->ly > 153) {
+                ppu->mode = 2;
+                ppu->ly   = 0;
             }
-        } else if (line_dots <= 80) {
-            mode = 2;
 
-            if ((stat & STAT_FLAG_MODE2_INT) && !int_req) {
-                interrupt_request(ppu->interrupt, INTERRUPT_LCD, INTERRUPT_REQUESTED);
-                int_req = 1;
-            }
-        } else if (line_dots <= 172) {
-            mode = 3;
-        } else {
-            mode = 0;
+            if (ppu->lyc == ppu->ly) {
+                ppu->lcd_stat |= STAT_FLAG_LYC_EQ_LY;
 
-            if ((stat & STAT_FLAG_MODE0_INT) && !int_req) {
-                interrupt_request(ppu->interrupt, INTERRUPT_LCD, INTERRUPT_REQUESTED);
-                int_req = 1;
+                if (ppu->lcd_stat & STAT_FLAG_LYC_INT)
+                    interrupt_request(ppu->interrupt, INTERRUPT_LCD, INTERRUPT_REQUESTED);
+            } else {
+                ppu->lcd_stat &= ~STAT_FLAG_LYC_EQ_LY;
             }
         }
 
-        if (ly == lyc && !(stat & STAT_FLAG_LYC_EQ_LY)) {
-            stat = stat | STAT_FLAG_LYC_EQ_LY;
+        if (ppu->mode == 1)
+            continue;
 
-            if ((stat & STAT_FLAG_LYC_INT) && !int_req) {
+        if (ppu->mode != 2 && ppu->line_dots <= 80) {
+            ppu->mode = 2;
+
+            if (ppu->lcd_stat & STAT_FLAG_MODE2_INT)
                 interrupt_request(ppu->interrupt, INTERRUPT_LCD, INTERRUPT_REQUESTED);
-                int_req = 1;
-            }
+        } else if (ppu->mode != 3 && ppu->line_dots <= 80+172) {
+            ppu->mode = 3;
+        } else if (ppu->mode != 0 && ppu->line_dots <= 456) {
+            ppu->mode = 0;
+
+            if (ppu->lcd_stat & STAT_FLAG_MODE0_INT)
+                interrupt_request(ppu->interrupt, INTERRUPT_LCD, INTERRUPT_REQUESTED);
+
+            render_scanline(ppu);
         }
     }
 
-    ppu->line_dots  = line_dots;
-    ppu->frame_dots = frame_dots;
-    ppu->mode       = mode;
-    ppu->ly         = ly;
-    ppu->lcd_stat   = (stat & 0xf4) | mode;
-}
-
-void ppu_render(struct ppu *ppu) {
-    render_bg(ppu);
+    ppu->lcd_stat = (ppu->lcd_stat & 0xfc) | ppu->mode;
 }
 
 void ppu_dma(struct ppu *ppu, uint8_t value) {
@@ -168,65 +180,169 @@ enum ppu_result map_addresses(struct ppu *ppu, struct mem *mem) {
     return PPU_OK;
 }
 
-static void noise_render_bg(struct ppu *ppu) {
-    for (int i = 0; i < 256*256*3; i++)
-        ppu->textures.bg[i] = rand() % 256;
+static void render_scanline(struct ppu *ppu) {
+    int ly = ppu->ly;
+
+    if (ly < 144) {
+        render_scanline_bg(ppu, ly);
+        render_scanline_win(ppu, ly);
+        render_scanline_obj(ppu, ly);
+    }
 }
 
-static void render_bg(struct ppu *ppu) {
-    uint8_t  lcdc       = ppu->lcd_ctrl;
-    uint8_t  bgenable   = (lcdc & CTRL_FLAG_BG_WIN_ENABLE);
-    uint8_t  addressing = (lcdc & CTRL_FLAG_BG_AND_WINDOW_ADDRESING_MODE) ? ADDRESSING_MODE_8000 : ADDRESSING_MODE_8800;
+static void render_scanline_bg(struct ppu *ppu, int ly) {
+    uint8_t lcdc        = ppu->lcd_ctrl;
+    uint8_t bgenable    = lcdc & CTRL_FLAG_BG_WIN_ENABLE;
+    uint8_t scy         = ppu->scy;
+    uint8_t scx         = ppu->scx;
+    uint8_t addressing  = (lcdc & CTRL_FLAG_BG_AND_WINDOW_ADDRESING_MODE) ? ADDRESSING_MODE_8000 : ADDRESSING_MODE_8800;
     uint16_t from       = (lcdc & CTRL_FLAG_BG_TILE_MAP_AREA) ? 0x9c00 : 0x9800;
-    uint16_t to         = from + 1024;
-    uint8_t *map        = ppu->textures.bg;
+
+    uint8_t *vram        = ppu->vram;
+    uint8_t *framebuffer = ppu->textures.screen;
 
     if (!bgenable) {
-        for (int i = 0; i < 256*256*3; i++)
-            ppu->textures.bg[i] = 0xff;
+        for (int x = 0; x < 160; x++) {
+            int framebuffer_idx = (ly * 160 * 3) + (x * 3);
+
+            framebuffer[framebuffer_idx]   = 0xff;
+            framebuffer[framebuffer_idx+1] = 0xff;
+            framebuffer[framebuffer_idx+2] = 0xff;
+        }
 
         return;
     }
 
-    uint8_t tile_data[16];
+    for (int x = 0; x < 160; x++) {
+        int bg_x = (scx +  x) & 0xff;
+        int bg_y = (scy + ly) & 0xff;
 
-    for (uint16_t addr = from; addr < to; addr++) {
-        uint8_t index = mem_read8(ppu->mem, addr);
+        int tile_col = bg_x / 8;
+        int tile_row = bg_y / 8;
+
+        uint16_t map_addr = from + (tile_row * 32) + tile_col;
+        uint8_t  tile_idx = vram[map_addr - 0x8000];
+
+        int tile_x = bg_x % 8;
+        int tile_y = bg_y % 8;
+
+        uint16_t tile_addr = get_tile_address(tile_idx, addressing);
+        uint8_t  lsb       = vram[(tile_addr + (tile_y * 2)) - 0x8000];
+        uint8_t  msb       = vram[(tile_addr + (tile_y * 2) + 1) - 0x8000];
+
+        int bit = 7 - tile_x;
+
+        uint8_t color_idx = ((((msb >> bit) & 1) << 1)) | ((lsb >> bit) & 1);
+        uint8_t *color = pallete[color_idx];
+
+        int framebuffer_idx = (ly * 160 * 3) + (x * 3);
+
+        framebuffer[framebuffer_idx]   = color[0];
+        framebuffer[framebuffer_idx+1] = color[1];
+        framebuffer[framebuffer_idx+2] = color[2];
+    }
+}
+
+static void render_scanline_win(struct ppu *ppu, int ly) {
+    uint8_t lcdc        = ppu->lcd_ctrl;
+    uint8_t bgenable    = lcdc & CTRL_FLAG_BG_WIN_ENABLE;
+    uint8_t winenable   = lcdc & CTRL_FLAG_WIN_ENABLE;
+    uint8_t wy          = ppu->wy;
+    uint8_t wx          = ppu->wx;
+    uint8_t addressing  = (lcdc & CTRL_FLAG_BG_AND_WINDOW_ADDRESING_MODE) ? ADDRESSING_MODE_8000 : ADDRESSING_MODE_8800;
+    uint16_t from       = (lcdc & CTRL_FLAG_WIN_TILE_MAP_AREA) ? 0x9c00 : 0x9800;
+
+    uint8_t *vram        = ppu->vram;
+    uint8_t *framebuffer = ppu->textures.screen;
+
+    if (!bgenable || !winenable)
+        return;
+
+    if (ly < wy)
+        return;
+
+    int win_row  = ly - wy;
+    int screen_x = wx - 7;
+
+    for (int x = screen_x; x < 160; x++) {
+        int win_col = x - screen_x;
+
+        int tile_col = win_col / 8;
+        int tile_row = win_row / 8;
+        int tile_x   = win_col % 8;
+        int tile_y   = win_row % 8;
+
+        uint16_t map_addr = from + (tile_row * 32) + tile_col;
+        uint8_t  tile_idx = vram[map_addr - 0x8000];
+
+        uint16_t tile_addr = get_tile_address(tile_idx, addressing);
+        uint8_t  lsb       = vram[(tile_addr + (tile_y * 2)) - 0x8000];
+        uint8_t  msb       = vram[(tile_addr + (tile_y * 2) + 1) - 0x8000];
+
+        int bit = 7 - tile_x;
+
+        uint8_t color_idx = ((((msb >> bit) & 1) << 1)) | ((lsb >> bit) & 1);
+        uint8_t *color = pallete[color_idx];
+
+        int framebuffer_idx = (ly * 160 * 3) + (x * 3);
         
-        int tile_idx  = addr - from;
-        int texture_x = (tile_idx % 32) * 8;
-        int texture_y = (tile_idx / 32) * 8;
+        framebuffer[framebuffer_idx]   = color[0];
+        framebuffer[framebuffer_idx+1] = color[1];
+        framebuffer[framebuffer_idx+2] = color[2];
+    }
+}
 
-        get_tile(ppu, index, addressing, tile_data);
+static void render_scanline_obj(struct ppu *ppu, int ly) {
+    uint8_t  lcdc       = ppu->lcd_ctrl;
+    uint8_t  obj_enable = lcdc & CTRL_FLAG_OBJ_ENABLE;
+    uint8_t  obj_size   = lcdc & CTRL_FLAG_OBJ_SIZE;
 
-        for (int t = 0; t < 16; t += 2) {
-            uint8_t lsb = tile_data[t];
-            uint8_t msb = tile_data[t+1];
+    uint8_t *vram        = ppu->vram;
+    uint8_t *oam         = ppu->oam;
+    uint8_t *framebuffer = ppu->textures.screen;
 
-            for (int bit = 7; bit >= 0; bit--) {
-                uint8_t *color = pallete[(((msb >> bit) << 1) | (lsb >> bit)) & 0x3];
+    for (uint16_t addr = 0xfe00; addr <= 0xfe9f; addr += 4) {
+        int obj_y = oam[addr - 0xfe00] - 16;
+        
+        if (ly < obj_y || ly >= obj_y+8)
+            continue;
 
-                int x = (texture_x + (7 - bit)) * 3;
-                int y = (texture_y + (t / 2));
-                int i = (y * 256*3) + x;
+        int      obj_x     = oam[(addr+1) - 0xfe00] - 8;
+        uint8_t  tile_idx  = oam[(addr+2) - 0xfe00];
+        uint8_t  attr      = oam[(addr+3) - 0xfe00];
+        uint16_t tile_addr = get_tile_address(tile_idx, ADDRESSING_MODE_8000);
 
-                map[i]   = color[0];
-                map[i+1] = color[1];
-                map[i+2] = color[2];
-            }
+        int tile_row = ly - obj_y;
+
+        uint8_t lsb = vram[(tile_addr + (tile_row * 2)) - 0x8000];
+        uint8_t msb = vram[(tile_addr + (tile_row * 2) + 1) - 0x8000];
+
+        for (int x = obj_x; x < obj_x+8; x++) {
+            if (x < 0)
+                continue;
+
+            if (x >= 160)
+                break;
+
+            int bit = 7 - (x - obj_x);
+
+            uint8_t color_idx = ((((msb >> bit) & 1) << 1)) | ((lsb >> bit) & 1);
+            
+            if (color_idx == 0)
+                continue;
+
+            uint8_t *color = pallete[color_idx];
+
+            int framebuffer_idx = (ly * 160 * 3) + (x * 3);
+            
+            framebuffer[framebuffer_idx]   = color[0];
+            framebuffer[framebuffer_idx+1] = color[1];
+            framebuffer[framebuffer_idx+2] = color[2];
         }
     }
 }
 
-static void render_win(struct ppu *ppu) {
-
-}
-
-static void render_obj(struct ppu *ppu) {
-
-}
-
-static void get_tile(struct ppu *ppu, uint8_t index, uint8_t addressing, uint8_t *tile_data) {
+static uint16_t get_tile_address(uint8_t index, uint8_t addressing) {
     uint16_t base_addr = 0x8000;
     int      offset    = 16*index;
 
@@ -235,24 +351,5 @@ static void get_tile(struct ppu *ppu, uint8_t index, uint8_t addressing, uint8_t
         offset    = 16 * ((int8_t)index);
     }
 
-    uint16_t addr = base_addr + offset;
-
-    for (int i = 0; i < 16; i += 2) {
-        uint8_t lsb = mem_read8(ppu->mem, addr+i);
-        uint8_t msb = mem_read8(ppu->mem, addr+i+1);
-
-        tile_data[i]   = lsb;
-        tile_data[i+1] = msb;
-    }
-}
-
-static void get_obj_tile(struct ppu *ppu, uint8_t index, uint8_t *tile_data) {
-    get_tile(ppu, index, ADDRESSING_MODE_8000, tile_data);
-}
-
-static void get_bgwin_tile(struct ppu *ppu, uint8_t index, uint8_t *tile_data) {
-    uint8_t ctrl       = ppu->lcd_ctrl;
-    uint8_t addressing = (ctrl & CTRL_FLAG_BG_AND_WINDOW_ADDRESING_MODE) ? ADDRESSING_MODE_8000 : ADDRESSING_MODE_8800;
-
-    get_tile(ppu, index, addressing, tile_data);
+    return base_addr + offset;
 }
