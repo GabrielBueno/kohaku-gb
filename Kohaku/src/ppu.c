@@ -4,8 +4,6 @@
 #include <assert.h>
 #include "log.h"
 
-
-
 #define STAT_FLAG_LYC_INT   0x40
 #define STAT_FLAG_MODE2_INT 0x20
 #define STAT_FLAG_MODE1_INT 0x10
@@ -25,13 +23,19 @@
 #define ADDRESSING_MODE_8000 1
 #define ADDRESSING_MODE_8800 0
 
+#define ATTR_FLAG_PRIORITY    0x80
+#define ATTR_FLAG_Y_FLIP      0x40
+#define ATTR_FLAG_X_FLIP      0x20
+#define ATTR_FLAG_DMG_PALETTE 0x10
+#define ATTR_FLAG_BANK        0x08
+#define ATTR_FLAG_CGB_PALETTE 0x07
+
 static uint8_t pallete[][3] = {
     { 0xf2, 0xe5, 0xd5, },
     { 0xbf, 0x99, 0x95, },
     { 0x8c, 0x5a, 0x5a, },
     { 0x40, 0x01, 0x01, },
 };
-
 
 static enum ppu_result map_addresses(struct ppu *ppu, struct mem *mem);
 static uint16_t get_tile_address(uint8_t index, uint8_t method);
@@ -309,10 +313,13 @@ static void render_scanline_obj(struct ppu *ppu, int ly) {
 
         int      obj_x     = oam[(addr+1) - 0xfe00] - 8;
         uint8_t  tile_idx  = oam[(addr+2) - 0xfe00];
-        uint8_t  attr      = oam[(addr+3) - 0xfe00];
+        uint8_t  attr      = oam[(addr + 3) - 0xfe00];
         uint16_t tile_addr = get_tile_address(tile_idx, ADDRESSING_MODE_8000);
 
-        int tile_row = ly - obj_y;
+        uint8_t x_flip = attr & ATTR_FLAG_X_FLIP;
+        uint8_t y_flip = attr & ATTR_FLAG_Y_FLIP;
+
+        int tile_row = y_flip ? (7 - (ly - obj_y)) : (ly - obj_y);
 
         uint8_t lsb = vram[(tile_addr + (tile_row * 2)) - 0x8000];
         uint8_t msb = vram[(tile_addr + (tile_row * 2) + 1) - 0x8000];
@@ -324,7 +331,7 @@ static void render_scanline_obj(struct ppu *ppu, int ly) {
             if (x >= 160)
                 break;
 
-            int bit = 7 - (x - obj_x);
+            int bit = x_flip ? (x - obj_x) : (7 - (x - obj_x));
 
             uint8_t color_idx = ((((msb >> bit) & 1) << 1)) | ((lsb >> bit) & 1);
             
